@@ -5,10 +5,11 @@ import os
 from pathlib import Path
 from typing import List, Optional
 
-from langchain.document_loaders import PyPDFLoader, TextLoader
+# LangChain 최신 버전 import 경로
+from langchain_community.document_loaders import PyPDFLoader, TextLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.embeddings import HuggingFaceEmbeddings
-from langchain.vectorstores import Chroma
+from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_chroma import Chroma
 from langchain.chains import RetrievalQA
 from langchain.prompts import PromptTemplate
 from dotenv import load_dotenv
