@@ -206,185 +206,123 @@ def test_ngrok_connection() -> tuple[bool, str]:
         return False, f"ngrok 연결 오류: {str(e)}"
 
 
-def get_ollama_models(url: str = None) -> List[str]:
-    """설치된 Ollama 모델 목록 반환
+def call_ollama_api(endpoint: str, data: dict = None, timeout: int = 30) -> dict:
+    """Ollama API 직접 호출 (CORS 문제 해결)
     
     Args:
-        url: Ollama 서버 URL (None이면 자동 감지)
+        endpoint: API 엔드포인트 (예: 'api/tags', 'api/generate')
+        data: POST 요청 데이터 (None이면 GET 요청)
+        timeout: 요청 타임아웃 (초)
+    
+    Returns:
+        API 응답 데이터 또는 None (실패 시)
+    """
+    if not requests:
+        return None
+    
+    # 연결 가능한 URL 찾기
+    is_available, available_url = check_ollama_status()
+    if not is_available:
+        return None
+    
+    try:
+        url = f"{available_url}/{endpoint}"
+        
+        if data:
+            response = requests.post(url, json=data, timeout=timeout)
+        else:
+            response = requests.get(url, timeout=timeout)
+        
+        if response.status_code == 200:
+            return response.json()
+        else:
+            print(f"Ollama API 오류: {response.status_code} - {response.text}")
+            return None
+            
+    except Exception as e:
+        print(f"Ollama API 호출 실패: {str(e)}")
+        return None
+
+def get_ollama_models(url: str = None) -> List[str]:
+    """설치된 Ollama 모델 목록 반환 (프록시 방식)
+    
+    Args:
+        url: Ollama 서버 URL (사용하지 않음, 자동 감지)
     
     Returns:
         설치된 모델 이름 목록
     """
-    if not ollama:
-        return ['llava:latest']
+    # 직접 API 호출로 모델 목록 가져오기
+    response = call_ollama_api('api/tags')
+    if not response or 'models' not in response:
+        return ['llava:latest']  # 기본값
     
-    # Ollama 클라이언트 설정
-    if url:
-        os.environ['OLLAMA_HOST'] = url
-    else:
-        # 자동으로 연결 가능한 URL 찾기
-        is_available, available_url = check_ollama_status()
-        if is_available:
-            os.environ['OLLAMA_HOST'] = available_url
-        
     try:
-        models = ollama.list()
+        model_names = []
+        for model in response['models']:
+            if 'name' in model:
+                # 태그 제거 (예: llava:latest -> llava)
+                base_name = model['name'].split(':')[0]
+                if base_name not in model_names:  # 중복 제거
+                    model_names.append(base_name)
         
-        # 디버깅: 실제 타입과 내용 확인
-        if isinstance(models, str):
-            # 문자열인 경우 'models=' 부분 제거하고 파싱
-            if models.startswith('models='):
-                models_str = models.replace('models=', '')
-                # 간단한 파싱: 'llava:latest' 형태의 모델명 추출
-                import re
-                model_matches = re.findall(r"'([^']+)'", models_str)
-                if model_matches:
-                    model_names = []
-                    for match in model_matches:
-                        if ':' in match:  # 모델명:태그 형태
-                            base_name = match.split(':')[0]
-                            if base_name not in model_names:
-                                model_names.append(base_name)
-                    return model_names
-                else:
-                    raise ValueError(f"문자열에서 모델명을 추출할 수 없음: {models_str}")
+        return model_names
         
-        # ListResponse 타입인 경우
-        if hasattr(models, 'models'):
-            model_names = []
-            for i, model in enumerate(models.models):
-                try:
-                    # Model 객체에서 'model' 속성 사용 (더 안전한 방법)
-                    if hasattr(model, 'model') and model.model:
-                        name = model.model
-                    elif hasattr(model, 'name') and model.name:
-                        name = model.name
-                    else:
-                        # 객체의 모든 속성 확인
-                        attrs = [attr for attr in dir(model) if not attr.startswith('_')]
-                        raise ValueError(f"모델 {i}에 'model' 속성이 없음. 사용 가능한 속성들: {attrs}")
-                    
-                    if name:
-                        # 태그 제거 (예: llava:latest -> llava)
-                        base_name = name.split(':')[0]
-                        if base_name not in model_names:  # 중복 제거
-                            model_names.append(base_name)
-                            
-                except Exception as model_error:
-                    raise ValueError(f"모델 {i} 처리 중 오류: {model_error}")
-            
-            return model_names
-        
-        # 리스트인 경우 (기존 로직)
-        if isinstance(models, list):
-            model_names = []
-            for i, model in enumerate(models):
-                try:
-                    # Model 객체에서 'model' 속성 사용 (더 안전한 방법)
-                    if hasattr(model, 'model') and model.model:
-                        name = model.model
-                    elif hasattr(model, 'name') and model.name:
-                        name = model.name
-                    else:
-                        # 객체의 모든 속성 확인
-                        attrs = [attr for attr in dir(model) if not attr.startswith('_')]
-                        raise ValueError(f"모델 {i}에 'model' 속성이 없음. 사용 가능한 속성들: {attrs}")
-                    
-                    if name:
-                        # 태그 제거 (예: llava:latest -> llava)
-                        base_name = name.split(':')[0]
-                        if base_name not in model_names:  # 중복 제거
-                            model_names.append(base_name)
-                            
-                except Exception as model_error:
-                    raise ValueError(f"모델 {i} 처리 중 오류: {model_error}")
-            
-            return model_names
-        
-        # 기타 타입 - 에러 메시지에서 타입 정보 포함
-        raise ValueError(f"예상과 다른 응답 구조: {models} (타입: {type(models)})")
-            
     except Exception as e:
-        # 에러를 다시 발생시켜서 Streamlit에서 처리할 수 있게
-        raise Exception(f"Ollama 모델 목록 가져오기 실패: {e}")
-
+        print(f"모델 목록 파싱 오류: {str(e)}")
+        return ['llava:latest']
 
 def get_ollama_models_with_versions(url: str = None) -> List[str]:
-    """설치된 Ollama 모델 목록 반환 (버전 포함)
+    """설치된 Ollama 모델 목록 반환 (버전 포함, 프록시 방식)
     
     Args:
-        url: Ollama 서버 URL (None이면 자동 감지)
+        url: Ollama 서버 URL (사용하지 않음, 자동 감지)
     
     Returns:
         설치된 모델 이름 목록 (버전 포함, 예: llava:latest, llama2:latest)
     """
-    if not ollama:
+    # 직접 API 호출로 모델 목록 가져오기
+    response = call_ollama_api('api/tags')
+    if not response or 'models' not in response:
         return []
     
-    # Ollama 클라이언트 설정
-    if url:
-        os.environ['OLLAMA_HOST'] = url
-    else:
-        # 자동으로 연결 가능한 URL 찾기
-        is_available, available_url = check_ollama_status()
-        if is_available:
-            os.environ['OLLAMA_HOST'] = available_url
-        
     try:
-        models = ollama.list()
+        model_names = []
+        for model in response['models']:
+            if 'name' in model and model['name'] not in model_names:
+                model_names.append(model['name'])
         
-        # ListResponse 타입인 경우
-        if hasattr(models, 'models'):
-            model_names = []
-            for i, model in enumerate(models.models):
-                try:
-                    # Model 객체에서 'model' 속성 사용 (더 안전한 방법)
-                    if hasattr(model, 'model') and model.model:
-                        name = model.model
-                    elif hasattr(model, 'name') and model.name:
-                        name = model.name
-                    else:
-                        # 객체의 모든 속성 확인
-                        attrs = [attr for attr in dir(model) if not attr.startswith('_')]
-                        raise ValueError(f"모델 {i}에 'model' 속성이 없음. 사용 가능한 속성들: {attrs}")
-                    
-                    if name and name not in model_names:  # 중복 제거
-                        model_names.append(name)
-                            
-                except Exception as model_error:
-                    raise ValueError(f"모델 {i} 처리 중 오류: {model_error}")
-            
-            return model_names
+        return model_names
         
-        # 리스트인 경우 (기존 로직)
-        if isinstance(models, list):
-            model_names = []
-            for i, model in enumerate(models):
-                try:
-                    # Model 객체에서 'model' 속성 사용 (더 안전한 방법)
-                    if hasattr(model, 'model') and model.model:
-                        name = model.model
-                    elif hasattr(model, 'name') and model.name:
-                        name = model.name
-                    else:
-                        # 객체의 모든 속성 확인
-                        attrs = [attr for attr in dir(model) if not attr.startswith('_')]
-                        raise ValueError(f"모델 {i}에 'model' 속성이 없음. 사용 가능한 속성들: {attrs}")
-                    
-                    if name and name not in model_names:  # 중복 제거
-                        model_names.append(name)
-                            
-                except Exception as model_error:
-                    raise ValueError(f"모델 {i} 처리 중 오류: {model_error}")
-            
-            return model_names
-        
-        # 기타 타입 - 에러 메시지에서 타입 정보 포함
-        raise ValueError(f"예상과 다른 응답 구조: {models} (타입: {type(models)})")
-            
     except Exception as e:
-        # 에러를 다시 발생시켜서 Streamlit에서 처리할 수 있게
-        raise Exception(f"Ollama 모델 목록 가져오기 실패: {e}")
+        print(f"모델 목록 파싱 오류: {str(e)}")
+        return []
+
+def generate_ollama_response(model: str, prompt: str, system: str = None) -> str:
+    """Ollama 모델로 응답 생성 (프록시 방식)
+    
+    Args:
+        model: 사용할 모델명
+        prompt: 사용자 프롬프트
+        system: 시스템 프롬프트 (선택사항)
+    
+    Returns:
+        생성된 응답 또는 오류 메시지
+    """
+    data = {
+        "model": model,
+        "prompt": prompt,
+        "stream": False
+    }
+    
+    if system:
+        data["system"] = system
+    
+    response = call_ollama_api('api/generate', data)
+    if response and 'response' in response:
+        return response['response']
+    else:
+        return "응답 생성에 실패했습니다."
 
 
 def is_supported_file_type(file_path: str) -> str:

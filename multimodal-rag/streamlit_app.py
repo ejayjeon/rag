@@ -26,7 +26,9 @@ from src.utils import (
     get_current_ollama_url, 
     test_ngrok_connection,
     update_ngrok_url,
-    get_current_ngrok_url
+    get_current_ngrok_url,
+    call_ollama_api,
+    generate_ollama_response
 )
 # except ImportError:
 #     def check_ollama_status():
@@ -106,6 +108,26 @@ with st.sidebar:
             else:
                 st.error(ngrok_message)
                 st.info("💡 ngrok URL이 변경되었을 수 있습니다. 위의 입력창에 새로운 URL을 입력하세요.")
+    
+    # Ollama API 직접 테스트
+    st.markdown("### 🧪 Ollama API 테스트")
+    if st.button("🔍 API 연결 테스트"):
+        with st.spinner("API 연결 테스트 중..."):
+            try:
+                # 모델 목록 가져오기 테스트
+                models_response = call_ollama_api('api/tags')
+                if models_response and 'models' in models_response:
+                    st.success(f"✅ API 연결 성공! 모델 {len(models_response['models'])}개 발견")
+                    # 모델 목록 표시
+                    with st.expander("📋 사용 가능한 모델"):
+                        for model in models_response['models']:
+                            model_name = model.get('name', 'Unknown')
+                            st.text(f"• {model_name}")
+                else:
+                    st.error("❌ API 연결 실패")
+                    st.info("💡 Ollama 서버가 실행 중인지 확인하세요")
+            except Exception as e:
+                st.error(f"❌ API 테스트 오류: {str(e)}")
     
     # 모델 상태 확인
     models = get_ollama_models()
