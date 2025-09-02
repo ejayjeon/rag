@@ -3,6 +3,7 @@
 import logging
 from typing import List, Callable, Any, Optional
 from pathlib import Path
+import os
 
 # 안전한 import with 폴백
 try:
@@ -95,30 +96,136 @@ def safe_file_operation(operation: Callable, file_path: str, *args, **kwargs) ->
         raise Exception(f"파일 작업 중 오류 발생: {str(e)}") from e
 
 
-def check_ollama_status() -> bool:
-    """Ollama 서버 상태 확인
+# Ollama 서버 설정
+DEFAULT_OLLAMA_URL = "http://localhost:11434"
+NGROK_OLLAMA_URL = "https://872621f41ae7.ngrok-free.app"
+
+# 동적으로 ngrok URL을 업데이트할 수 있는 변수
+_current_ngrok_url = NGROK_OLLAMA_URL
+
+def update_ngrok_url(new_url: str) -> None:
+    """ngrok URL 업데이트
+    
+    Args:
+        new_url: 새로운 ngrok URL
+    """
+    global _current_ngrok_url
+    _current_ngrok_url = new_url
+
+def get_current_ngrok_url() -> str:
+    """현재 설정된 ngrok URL 반환
     
     Returns:
-        Ollama 서버가 실행 중이면 True, 그렇지 않으면 False
+        현재 ngrok URL
+    """
+    return _current_ngrok_url
+
+def get_ollama_urls() -> List[str]:
+    """사용 가능한 Ollama 서버 URL 목록 반환
+    
+    Returns:
+        사용 가능한 Ollama 서버 URL 목록 (우선순위 순)
+    """
+    urls = []
+    
+    # 환경변수에서 Ollama URL 확인
+    env_url = os.environ.get('OLLAMA_BASE_URL')
+    if env_url:
+        urls.append(env_url)
+    
+    # ngrok URL 추가 (동적 URL 사용)
+    urls.append(_current_ngrok_url)
+    
+    # 로컬 URL 추가
+    urls.append(DEFAULT_OLLAMA_URL)
+    
+    return urls
+
+def check_ollama_status(url: str = None) -> tuple[bool, str]:
+    """Ollama 서버 상태 확인
+    
+    Args:
+        url: 확인할 Ollama 서버 URL (None이면 모든 URL 시도)
+    
+    Returns:
+        (연결 성공 여부, 연결된 URL)
     """
     if not requests:
-        return False
-        
+        return False, ""
+    
+    if url:
+        # 특정 URL만 확인
+        try:
+            response = requests.get(f"{url}/api/tags", timeout=5)
+            if response.status_code == 200:
+                return True, url
+        except:
+            pass
+        return False, ""
+    
+    # 모든 URL 시도
+    for test_url in get_ollama_urls():
+        try:
+            response = requests.get(f"{test_url}/api/tags", timeout=5)
+            if response.status_code == 200:
+                return True, test_url
+        except:
+            continue
+    
+    return False, ""
+
+def get_current_ollama_url() -> str:
+    """현재 연결된 Ollama 서버 URL 반환
+    
+    Returns:
+        현재 연결된 Ollama 서버 URL
+    """
+    is_available, url = check_ollama_status()
+    return url if is_available else "연결 안됨"
+
+def test_ngrok_connection() -> tuple[bool, str]:
+    """ngrok 연결 테스트
+    
+    Returns:
+        (연결 성공 여부, 상태 메시지)
+    """
+    if not requests:
+        return False, "requests 모듈이 설치되지 않음"
+    
     try:
-        response = requests.get("http://localhost:11434", timeout=5)
-        return response.status_code == 200
-    except:
-        return False
+        response = requests.get(f"{_current_ngrok_url}/api/tags", timeout=10)
+        if response.status_code == 200:
+            return True, f"ngrok 연결 성공: {_current_ngrok_url}"
+        else:
+            return False, f"ngrok 응답 오류: {response.status_code}"
+    except requests.exceptions.Timeout:
+        return False, "ngrok 연결 시간 초과"
+    except requests.exceptions.ConnectionError:
+        return False, "ngrok 연결 실패"
+    except Exception as e:
+        return False, f"ngrok 연결 오류: {str(e)}"
 
 
-def get_ollama_models() -> List[str]:
+def get_ollama_models(url: str = None) -> List[str]:
     """설치된 Ollama 모델 목록 반환
+    
+    Args:
+        url: Ollama 서버 URL (None이면 자동 감지)
     
     Returns:
         설치된 모델 이름 목록
     """
     if not ollama:
         return ['llava:latest']
+    
+    # Ollama 클라이언트 설정
+    if url:
+        os.environ['OLLAMA_HOST'] = url
+    else:
+        # 자동으로 연결 가능한 URL 찾기
+        is_available, available_url = check_ollama_status()
+        if is_available:
+            os.environ['OLLAMA_HOST'] = available_url
         
     try:
         models = ollama.list()
@@ -202,14 +309,26 @@ def get_ollama_models() -> List[str]:
         raise Exception(f"Ollama 모델 목록 가져오기 실패: {e}")
 
 
-def get_ollama_models_with_versions() -> List[str]:
+def get_ollama_models_with_versions(url: str = None) -> List[str]:
     """설치된 Ollama 모델 목록 반환 (버전 포함)
+    
+    Args:
+        url: Ollama 서버 URL (None이면 자동 감지)
     
     Returns:
         설치된 모델 이름 목록 (버전 포함, 예: llava:latest, llama2:latest)
     """
     if not ollama:
         return []
+    
+    # Ollama 클라이언트 설정
+    if url:
+        os.environ['OLLAMA_HOST'] = url
+    else:
+        # 자동으로 연결 가능한 URL 찾기
+        is_available, available_url = check_ollama_status()
+        if is_available:
+            os.environ['OLLAMA_HOST'] = available_url
         
     try:
         models = ollama.list()

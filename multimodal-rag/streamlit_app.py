@@ -20,7 +20,14 @@ except ImportError as e:
     IMPORT_ERROR = str(e)
 
 # try:
-from src.utils import check_ollama_status, get_ollama_models
+from src.utils import (
+    check_ollama_status, 
+    get_ollama_models, 
+    get_current_ollama_url, 
+    test_ngrok_connection,
+    update_ngrok_url,
+    get_current_ngrok_url
+)
 # except ImportError:
 #     def check_ollama_status():
 #         return False
@@ -50,14 +57,55 @@ with st.sidebar:
     st.markdown("## 🔧 시스템 상태")
     
     # Ollama 상태 확인
-    ollama_status = check_ollama_status()
-    if ollama_status:
-        st.success("🦙 Ollama 연결됨")
-    else:
-        st.error("❌ Ollama 연결 실패")
-        st.info("Ollama를 설치하고 실행하세요:")
-        st.code("ollama serve")
+    try:
+        ollama_status, current_url = check_ollama_status()
+        if ollama_status:
+            st.success("🦙 Ollama 연결됨")
+            st.info(f"📍 연결된 서버: {current_url}")
+            
+            # ngrok 연결 상태 확인
+            if "ngrok" in current_url:
+                st.success("🌐 ngrok 터널 연결됨")
+            elif "localhost" in current_url:
+                st.info("🏠 로컬 서버 연결됨")
+        else:
+            st.error("❌ Ollama 연결 실패")
+            st.info("Ollama를 설치하고 실행하세요:")
+            st.code("ollama serve")
+            st.info("⚠️ Ollama 없이도 텍스트 문서 처리는 가능합니다")
+    except Exception as e:
+        st.error(f"❌ Ollama 상태 확인 오류: {str(e)}")
         st.info("⚠️ Ollama 없이도 텍스트 문서 처리는 가능합니다")
+    
+    # ngrok 연결 테스트 및 URL 업데이트
+    st.markdown("### 🌐 ngrok 설정")
+    
+    # 현재 ngrok URL 표시
+    current_ngrok_url = get_current_ngrok_url()
+    st.info(f"현재 ngrok URL: `{current_ngrok_url}`")
+    
+    # ngrok URL 업데이트
+    new_ngrok_url = st.text_input(
+        "새로운 ngrok URL 입력",
+        value=current_ngrok_url,
+        help="ngrok URL이 변경되었을 때 여기에 입력하세요"
+    )
+    
+    if st.button("🔄 ngrok URL 업데이트"):
+        if new_ngrok_url != current_ngrok_url:
+            update_ngrok_url(new_ngrok_url)
+            st.success(f"ngrok URL이 업데이트되었습니다: {new_ngrok_url}")
+            st.rerun()
+    
+    # ngrok 연결 테스트 버튼
+    if st.button("🔍 ngrok 연결 테스트"):
+        with st.spinner("ngrok 연결 테스트 중..."):
+            ngrok_success, ngrok_message = test_ngrok_connection()
+            if ngrok_success:
+                st.success(ngrok_message)
+            else:
+                st.error(ngrok_message)
+                st.info("💡 ngrok URL이 변경되었을 수 있습니다. 위의 입력창에 새로운 URL을 입력하세요.")
     
     # 모델 상태 확인
     models = get_ollama_models()
