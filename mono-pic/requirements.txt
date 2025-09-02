@@ -1,0 +1,27 @@
+# Core dependencies
+streamlit>=1.28.0
+pillow>=10.0.0
+python-dotenv>=1.0.0
+
+# Audio processing
+# whisper  # Will be added in v0.2.0
+
+# Image processing  
+# opencv-python  # Will be added in v0.2.0
+
+# NLP and ML
+# openai>=1.0.0  # Will be added in v0.2.0
+# anthropic  # Will be added in v0.2.0
+
+# Text processing
+# spacy>=3.7.0  # Will be added in v0.2.0
+# textblob>=0.17.0  # Will be added in v0.2.0
+
+# Utilities
+pathlib
+typing-extensions>=4.0.0
+
+# Development (optional)
+pytest>=7.0.0
+black>=23.0.0
+flake8>=6.0.0

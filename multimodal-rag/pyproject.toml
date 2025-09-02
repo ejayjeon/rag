@@ -1,0 +1,24 @@
+[project]
+name = "multimodal-rag"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "beautifulsoup4>=4.13.5",
+    "chromadb>=1.0.20",
+    "langchain>=0.3.27",
+    "langchain-community>=0.3.29",
+    "langchain-ollama>=0.3.7",
+    "ollama>=0.5.3",
+    "openpyxl>=3.1.5",
+    "pillow>=11.3.0",
+    "pymupdf>=1.26.4",
+    "pypdf>=6.0.0",
+    "pytesseract>=0.3.13",
+    "python-docx>=1.2.0",
+    "requests>=2.32.5",
+    "sentence-transformers>=5.1.0",
+    "streamlit>=1.49.1",
+    "unstructured>=0.18.14",
+]
