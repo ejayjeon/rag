@@ -1,0 +1,3 @@
+[build]
+# requirements.txt 대신 pyproject.toml 사용
+requirements = "pyproject.toml"
