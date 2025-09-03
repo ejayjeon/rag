@@ -195,6 +195,34 @@ with st.sidebar:
     # Ollama 상태 확인 (ollama 선택시에만)
     if llm_provider == "ollama":
         try:
+            # Streamlit Cloud 환경 감지
+            import os
+            is_streamlit_cloud = os.getenv('STREAMLIT_SERVER_PORT') is not None
+            
+            if is_streamlit_cloud:
+                st.info("☁️ Streamlit Cloud 환경에서 실행 중")
+                st.warning("⚠️ Ollama 사용을 위해서는 ngrok 터널이 필요합니다")
+                
+                # ngrok 설정 안내
+                with st.expander("🌐 ngrok 설정 방법", expanded=False):
+                    st.markdown("""
+                    **1. 로컬에서 ngrok 실행:**
+                    ```bash
+                    ngrok http 11434
+                    ```
+                    
+                    **2. 생성된 URL을 환경변수에 설정:**
+                    ```bash
+                    export OLLAMA_HOST="https://xxxxx.ngrok-free.app"
+                    ```
+                    
+                    **3. Streamlit Cloud에서 환경변수 설정:**
+                    - Settings → Secrets에 추가:
+                    ```toml
+                    OLLAMA_HOST = "https://xxxxx.ngrok-free.app"
+                    ```
+                    """)
+            
             ollama_status, current_url = check_ollama_status()
             if ollama_status:
                 st.success("🦙 Ollama 연결됨")
@@ -206,9 +234,13 @@ with st.sidebar:
                 elif "localhost" in current_url:
                     st.info("🏠 로컬 서버 연결됨")
             else:
-                st.error("❌ Ollama 연결 실패")
-                st.info("Ollama를 설치하고 실행하세요:")
-                st.code("ollama serve")
+                if is_streamlit_cloud:
+                    st.error("❌ ngrok 터널 연결 실패")
+                    st.info("💡 위의 ngrok 설정 방법을 따라주세요")
+                else:
+                    st.error("❌ Ollama 연결 실패")
+                    st.info("Ollama를 설치하고 실행하세요:")
+                    st.code("ollama serve")
                 st.info("⚠️ OpenAI로 전환하거나 텍스트 문서 처리만 가능합니다")
         except Exception as e:
             st.error(f"❌ Ollama 상태 확인 오류: {str(e)}")
@@ -786,63 +818,80 @@ if st.session_state.get('documents_added', False):
     st.markdown("---")
     st.markdown("## 💬 채팅형 질문하기")
     
-    # 채팅 히스토리 표시
-    for message in st.session_state.chat_history:
-        if message['role'] == 'user':
-            with st.chat_message("user"):
-                st.write(message['content'])
-                
-                # 컨텍스트 정보 표시 (사용자 메시지)
-                if 'context' in message:
-                    with st.expander("🔍 컨텍스트 정보", expanded=False):
-                        context = message['context']
-                        st.info(f"📁 업로드된 파일: {context['uploaded_files']}개")
-                        st.info(f"📄 파일 타입: {', '.join(context['file_types'])}")
-                        st.info(f"⏱️ 세션 시간: {context['session_duration']:.1f}초")
-        else:
-            with st.chat_message("assistant"):
-                st.write(message['content'])
-                
-                # 메타 정보가 있으면 표시
-                if 'confidence' in message:
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        st.metric("🎯 신뢰도", f"{message['confidence']:.1%}")
-                    with col2:
-                        st.metric("📚 참조 소스", message.get('source_count', 0))
-                
-                # 컨텍스트 사용 정보 표시
-                if 'context_used' in message:
-                    context_used = message['context_used']
-                    st.success(f"✅ 컨텍스트 인식: {context_used['files_referenced']}개 파일 참조됨")
-                
-                # 참조 소스가 있으면 표시
-                if 'sources' in message and message['sources']:
-                    with st.expander("📚 참조된 소스 보기"):
-                        for i, doc in enumerate(message['sources']):
-                            st.markdown(f"**소스 {i+1}:**")
+                    # 채팅 히스토리 표시
+                for message in st.session_state.chat_history:
+                    if message['role'] == 'user':
+                        with st.chat_message("user"):
+                            st.write(message['content'])
                             
-                            # 메타데이터
-                            metadata = doc.metadata
-                            source_type = metadata.get('type', '알 수 없음')
-                            source_name = metadata.get('filename', metadata.get('source', '알 수 없음'))
-                            
-                            st.write(f"📄 **유형**: {source_type}")
-                            st.write(f"📁 **파일**: {Path(source_name).name}")
-                            
-                            # 내용 미리보기
-                            content = doc.page_content[:300]
-                            if len(doc.page_content) > 300:
-                                content += "..."
-                            
-                            st.text_area(
-                                f"내용 미리보기 {i+1}",
-                                content,
-                                height=100,
-                                key=f"source_{i}_{message.get('timestamp', 0)}",
-                                disabled=True
-                            )
-                            st.markdown("---")
+                            # 컨텍스트 정보 표시 (사용자 메시지)
+                            if 'context' in message:
+                                with st.expander("🔍 컨텍스트 정보", expanded=False):
+                                    context = message['context']
+                                    st.info(f"📁 업로드된 파일: {context['uploaded_files']}개")
+                                    st.info(f"📄 파일 타입: {', '.join(context['file_types'])}")
+                                    st.info(f"⏱️ 세션 시간: {context['session_duration']:.1f}초")
+                    else:
+                        with st.chat_message("assistant"):
+                            # 오류 메시지인지 확인
+                            if message.get('error', False):
+                                st.error("❌ 오류 발생")
+                                st.write(message['content'])
+                                
+                                # 오류 상세 정보 표시
+                                if 'error_details' in message:
+                                    with st.expander("🔍 오류 상세 정보", expanded=False):
+                                        st.code(message['error_details'])
+                                        
+                                        # 오류 해결 방법 제안
+                                        st.markdown("**💡 해결 방법:**")
+                                        st.markdown("• OpenAI API 키 확인")
+                                        st.markdown("• 인터넷 연결 상태 확인")
+                                        st.markdown("• API 사용량 한도 확인")
+                                        st.markdown("• 잠시 후 다시 시도")
+                            else:
+                                st.write(message['content'])
+                                
+                                # 메타 정보가 있으면 표시
+                                if 'confidence' in message:
+                                    col1, col2 = st.columns(2)
+                                    with col1:
+                                        st.metric("🎯 신뢰도", f"{message['confidence']:.1%}")
+                                    with col2:
+                                        st.metric("📚 참조 소스", message.get('source_count', 0))
+                                
+                                # 컨텍스트 사용 정보 표시
+                                if 'context_used' in message:
+                                    context_used = message['context_used']
+                                    st.success(f"✅ 컨텍스트 인식: {context_used['files_referenced']}개 파일 참조됨")
+                                
+                                # 참조 소스가 있으면 표시
+                                if 'sources' in message and message['sources']:
+                                    with st.expander("📚 참조된 소스 보기"):
+                                        for i, doc in enumerate(message['sources']):
+                                            st.markdown(f"**소스 {i+1}:**")
+                                            
+                                            # 메타데이터
+                                            metadata = doc.metadata
+                                            source_type = metadata.get('type', '알 수 없음')
+                                            source_name = metadata.get('filename', metadata.get('source', '알 수 없음'))
+                                            
+                                            st.write(f"📄 **유형**: {source_type}")
+                                            st.write(f"📁 **파일**: {Path(source_name).name}")
+                                            
+                                            # 내용 미리보기
+                                            content = doc.page_content[:300]
+                                            if len(doc.page_content) > 300:
+                                                content += "..."
+                                            
+                                            st.text_area(
+                                                f"내용 미리보기 {i+1}",
+                                                content,
+                                                height=100,
+                                                key=f"source_{i}_{message.get('timestamp', 0)}",
+                                                disabled=True
+                                            )
+                                            st.markdown("---")
     
     # 예시 질문 버튼
     # st.markdown("**💡 예시 질문:**")
@@ -893,7 +942,36 @@ if st.session_state.get('documents_added', False):
                 위의 컨텍스트를 고려하여 답변해주세요. 업로드된 파일들이 있다면 그 내용을 참고하여 답변하세요.
                 """
                 
-                result = st.session_state.rag_system.search(context_prompt)
+                # OpenAI 사용 시 타임아웃 및 재시도 로직
+                max_retries = 3
+                retry_count = 0
+                
+                while retry_count < max_retries:
+                    try:
+                        result = st.session_state.rag_system.search(context_prompt)
+                        break  # 성공 시 루프 탈출
+                    except Exception as retry_error:
+                        retry_count += 1
+                        if retry_count >= max_retries:
+                            # 최대 재시도 횟수 초과
+                            error_msg = f"❌ OpenAI API 호출 실패 (재시도 {max_retries}회): {str(retry_error)}"
+                            st.error(error_msg)
+                            
+                            # 오류 정보를 채팅 히스토리에 추가
+                            error_message = {
+                                'role': 'assistant',
+                                'content': error_msg,
+                                'timestamp': len(st.session_state.chat_history),
+                                'error': True,
+                                'error_details': str(retry_error)
+                            }
+                            st.session_state.chat_history.append(error_message)
+                            st.rerun()
+                            return
+                        else:
+                            # 재시도 안내
+                            st.warning(f"⚠️ API 호출 실패, {retry_count}/{max_retries} 재시도 중...")
+                            time.sleep(2)  # 2초 대기 후 재시도
                 
                 # AI 답변을 채팅 히스토리에 추가
                 assistant_message = {
