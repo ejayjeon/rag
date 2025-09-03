@@ -65,13 +65,31 @@ def _verify_openai_key(api_key: str):
     
     with st.spinner("API 키 검증 중..."):
         try:
+            # 네트워크 연결 상태 먼저 확인
+            import socket
+            try:
+                socket.create_connection(("api.openai.com", 443), timeout=10)
+                st.success("🌐 네트워크 연결 확인됨")
+            except socket.error as socket_error:
+                st.error(f"❌ 네트워크 연결 실패: {str(socket_error)}")
+                st.info("💡 인터넷 연결 상태를 확인해주세요")
+                st.session_state.openai_verified = False
+                return
+            
+            # OpenAI API 호출
             import openai
             client = openai.OpenAI(api_key=api_key)
             models = client.models.list()
             st.success("✅ OpenAI API 키 검증 성공!")
             st.session_state.openai_verified = True
+            
         except Exception as e:
-            st.error(f"❌ API 키 검증 실패: {str(e)}")
+            error_msg = str(e)
+            if "Cannot assign requested address" in error_msg:
+                st.error("❌ 네트워크 연결 실패")
+                st.info("💡 인터넷 연결 상태를 확인해주세요")
+            else:
+                st.error(f"❌ API 키 검증 실패: {error_msg}")
             st.session_state.openai_verified = False
 
 # 의존성 확인
@@ -263,6 +281,19 @@ with st.sidebar:
         elif 'openai_api_key' in st.session_state and st.session_state.openai_api_key:
             st.error("❌ OpenAI API 키 검증 실패")
             st.info("💡 올바른 API 키를 입력해주세요")
+            
+            # 네트워크 상태 확인 버튼
+            if st.button("🌐 네트워크 연결 상태 확인"):
+                with st.spinner("네트워크 상태 확인 중..."):
+                    try:
+                        import socket
+                        # OpenAI API 서버 연결 테스트
+                        socket.create_connection(("api.openai.com", 443), timeout=10)
+                        st.success("✅ 네트워크 연결 정상")
+                        st.info("💡 API 키를 다시 확인해주세요")
+                    except socket.error as socket_error:
+                        st.error(f"❌ 네트워크 연결 실패: {str(socket_error)}")
+                        st.info("💡 인터넷 연결 상태를 확인해주세요")
         else:
             st.warning("🔑 OpenAI API 키를 입력해주세요")
     
@@ -1032,30 +1063,68 @@ if st.session_state.get('documents_added', False):
                 
                 while retry_count < max_retries:
                     try:
+                        # 네트워크 연결 상태 확인
+                        if st.session_state.get('llm_provider') == 'openai':
+                            import socket
+                            try:
+                                # OpenAI API 서버 연결 테스트
+                                socket.create_connection(("api.openai.com", 443), timeout=5)
+                            except socket.error as socket_error:
+                                st.error(f"🌐 네트워크 연결 실패: {str(socket_error)}")
+                                st.info("💡 인터넷 연결 상태를 확인해주세요")
+                                raise Exception(f"네트워크 연결 실패: {str(socket_error)}")
+                        
                         result = st.session_state.rag_system.search(context_prompt)
                         break  # 성공 시 루프 탈출
+                        
                     except Exception as retry_error:
                         retry_count += 1
+                        error_type = type(retry_error).__name__
+                        
                         if retry_count >= max_retries:
                             # 최대 재시도 횟수 초과
-                            error_msg = f"❌ OpenAI API 호출 실패 (재시도 {max_retries}회): {str(retry_error)}"
+                            if "Cannot assign requested address" in str(retry_error):
+                                error_msg = f"❌ 네트워크 연결 실패 (재시도 {max_retries}회): {str(retry_error)}"
+                                error_solution = """
+                                💡 해결 방법:
+                                • 인터넷 연결 상태 확인
+                                • 방화벽 설정 확인
+                                • VPN 사용 중이라면 VPN 연결 상태 확인
+                                • 잠시 후 다시 시도
+                                """
+                            else:
+                                error_msg = f"❌ OpenAI API 호출 실패 (재시도 {max_retries}회): {str(retry_error)}"
+                                error_solution = """
+                                💡 해결 방법:
+                                • API 키 확인
+                                • API 사용량 한도 확인
+                                • 잠시 후 다시 시도
+                                """
+                            
                             st.error(error_msg)
+                            st.info(error_solution)
                             
                             # 오류 정보를 채팅 히스토리에 추가
                             error_message = {
                                 'role': 'assistant',
-                                'content': error_msg,
+                                'content': error_msg + "\n" + error_solution,
                                 'timestamp': len(st.session_state.chat_history),
                                 'error': True,
-                                'error_details': str(retry_error)
+                                'error_details': str(retry_error),
+                                'error_type': error_type
                             }
                             st.session_state.chat_history.append(error_message)
                             st.rerun()
                             break  # while 루프 탈출
                         else:
                             # 재시도 안내
-                            st.warning(f"⚠️ API 호출 실패, {retry_count}/{max_retries} 재시도 중...")
-                            time.sleep(2)  # 2초 대기 후 재시도
+                            if "Cannot assign requested address" in str(retry_error):
+                                st.warning(f"⚠️ 네트워크 연결 실패, {retry_count}/{max_retries} 재시도 중...")
+                                st.info("🌐 네트워크 상태를 확인하고 있습니다...")
+                            else:
+                                st.warning(f"⚠️ API 호출 실패, {retry_count}/{max_retries} 재시도 중...")
+                            
+                            time.sleep(3)  # 3초 대기 후 재시도
                 
                 # AI 답변을 채팅 히스토리에 추가
                 assistant_message = {
