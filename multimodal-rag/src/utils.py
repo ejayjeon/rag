@@ -98,7 +98,7 @@ def safe_file_operation(operation: Callable, file_path: str, *args, **kwargs) ->
 
 # Ollama 서버 설정
 DEFAULT_OLLAMA_URL = "http://localhost:11434"
-NGROK_OLLAMA_URL = "https://872621f41ae7.ngrok-free.app"
+NGROK_OLLAMA_URL = "https://9d503cf331b4.ngrok-free.app"
 
 # 동적으로 ngrok URL을 업데이트할 수 있는 변수
 _current_ngrok_url = NGROK_OLLAMA_URL
@@ -153,10 +153,16 @@ def check_ollama_status(url: str = None) -> tuple[bool, str]:
     if not requests:
         return False, ""
     
+    # ngrok용 헤더 설정
+    headers = {
+        'ngrok-skip-browser-warning': 'true',
+        'User-Agent': 'MultimodalRAG/1.0'
+    }
+    
     if url:
         # 특정 URL만 확인
         try:
-            response = requests.get(f"{url}/api/tags", timeout=5)
+            response = requests.get(f"{url}/api/tags", timeout=5, headers=headers)
             if response.status_code == 200:
                 return True, url
         except:
@@ -166,7 +172,7 @@ def check_ollama_status(url: str = None) -> tuple[bool, str]:
     # 모든 URL 시도
     for test_url in get_ollama_urls():
         try:
-            response = requests.get(f"{test_url}/api/tags", timeout=5)
+            response = requests.get(f"{test_url}/api/tags", timeout=5, headers=headers)
             if response.status_code == 200:
                 return True, test_url
         except:
@@ -192,8 +198,14 @@ def test_ngrok_connection() -> tuple[bool, str]:
     if not requests:
         return False, "requests 모듈이 설치되지 않음"
     
+    # ngrok용 헤더 설정
+    headers = {
+        'ngrok-skip-browser-warning': 'true',
+        'User-Agent': 'MultimodalRAG/1.0'
+    }
+    
     try:
-        response = requests.get(f"{_current_ngrok_url}/api/tags", timeout=10)
+        response = requests.get(f"{_current_ngrok_url}/api/tags", timeout=10, headers=headers)
         if response.status_code == 200:
             return True, f"ngrok 연결 성공: {_current_ngrok_url}"
         else:
@@ -220,6 +232,13 @@ def call_ollama_api(endpoint: str, data: dict = None, timeout: int = 30) -> dict
     if not requests:
         return None
     
+    # ngrok용 헤더 설정
+    headers = {
+        'ngrok-skip-browser-warning': 'true',
+        'User-Agent': 'MultimodalRAG/1.0',
+        'Content-Type': 'application/json'
+    }
+    
     # 연결 가능한 URL 찾기
     is_available, available_url = check_ollama_status()
     if not is_available:
@@ -229,9 +248,9 @@ def call_ollama_api(endpoint: str, data: dict = None, timeout: int = 30) -> dict
         url = f"{available_url}/{endpoint}"
         
         if data:
-            response = requests.post(url, json=data, timeout=timeout)
+            response = requests.post(url, json=data, timeout=timeout, headers=headers)
         else:
-            response = requests.get(url, timeout=timeout)
+            response = requests.get(url, timeout=timeout, headers=headers)
         
         if response.status_code == 200:
             return response.json()
