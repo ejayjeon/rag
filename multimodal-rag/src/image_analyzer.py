@@ -38,6 +38,8 @@ import logging
 import base64
 import io
 import time
+import os
+from pathlib import Path
 
 class ImageAnalyzer:
     """이미지 분석 전용 클래스"""
@@ -90,7 +92,6 @@ class ImageAnalyzer:
     def analyze_image(self, image_path: str, custom_prompt: Optional[str] = None, include_file_info: bool = True) -> dict:
         """이미지 분석 (파일 정보 포함)"""
         # 파일 존재 확인
-        from pathlib import Path
         if not Path(image_path).exists():
             raise FileNotFoundError(f"이미지 파일을 찾을 수 없습니다: {image_path}")
         
@@ -235,7 +236,6 @@ class ImageAnalyzer:
     def extract_text_from_image(self, image_path: str, include_file_info: bool = True) -> dict:
         """OCR을 통한 이미지에서 텍스트 추출 (파일 정보 포함)"""
         # 파일 존재 확인
-        from pathlib import Path
         if not Path(image_path).exists():
             raise FileNotFoundError(f"이미지 파일을 찾을 수 없습니다: {image_path}")
         
@@ -299,6 +299,58 @@ class ImageAnalyzer:
             result = self.analyze_image(path, include_file_info=include_file_info)
             results.append(result)
         return results
+    
+    def get_file_info(self, file_path: str) -> dict:
+        """파일 정보 반환 (ID, 해시, 메타데이터 포함)"""
+        if not Path(file_path).exists():
+            raise FileNotFoundError(f"파일을 찾을 수 없습니다: {file_path}")
+        
+        # 파일 ID 생성
+        file_id = self.generate_file_id(file_path)
+        
+        # 파일 메타데이터
+        file_stat = os.stat(file_path)
+        file_info = {
+            'file_id': file_id,
+            'name': Path(file_path).name,
+            'path': file_path,
+            'size': file_stat.st_size,
+            'type': Path(file_path).suffix.lower(),
+            'content_hash': self.file_hashes.get(file_path),
+            'upload_timestamp': int(file_stat.st_mtime * 1000),
+            'processed': True
+        }
+        
+        # 처리된 파일 목록에 저장
+        self.processed_files[file_id] = file_info
+        
+        return file_info
+    
+    def generate_file_id(self, file_path: str, file_content: bytes = None) -> str:
+        """파일의 고유 ID 생성"""
+        import hashlib
+        
+        if file_content is None:
+            # 파일에서 직접 읽기
+            try:
+                with open(file_path, 'rb') as f:
+                    file_content = f.read()
+            except Exception as e:
+                self.logger.error(f"파일 읽기 오류: {str(e)}")
+                # 파일명과 시간으로 대체
+                return f"{Path(file_path).name}_{int(time.time() * 1000)}"
+        
+        # MD5 해시 생성
+        content_hash = hashlib.md5(file_content).hexdigest()[:12]
+        timestamp = int(time.time() * 1000)
+        filename = Path(file_path).name
+        
+        file_id = f"{filename}_{content_hash}_{timestamp}"
+        
+        # 해시 저장
+        self.file_hashes[file_path] = content_hash
+        
+        return file_id
     
     def analyze_multiple_images_in_context(self, image_paths: List[str], context_prompt: str = None, include_file_info: bool = True) -> dict:
         """컨텍스트를 고려한 다중 이미지 순차 분석"""
@@ -404,63 +456,6 @@ class ImageAnalyzer:
                 'error': str(e),
                 'existing_context': existing_context
             }
-    
-    def generate_file_id(self, file_path: str, file_content: bytes = None) -> str:
-        """파일의 고유 ID 생성"""
-        import hashlib
-        import time
-        from pathlib import Path
-        
-        if file_content is None:
-            # 파일에서 직접 읽기
-            try:
-                with open(file_path, 'rb') as f:
-                    file_content = f.read()
-            except Exception as e:
-                self.logger.error(f"파일 읽기 오류: {str(e)}")
-                # 파일명과 시간으로 대체
-                return f"{Path(file_path).name}_{int(time.time() * 1000)}"
-        
-        # MD5 해시 생성
-        content_hash = hashlib.md5(file_content).hexdigest()[:12]
-        timestamp = int(time.time() * 1000)
-        filename = Path(file_path).name
-        
-        file_id = f"{filename}_{content_hash}_{timestamp}"
-        
-        # 해시 저장
-        self.file_hashes[file_path] = content_hash
-        
-        return file_id
-    
-    def get_file_info(self, file_path: str) -> dict:
-        """파일 정보 반환 (ID, 해시, 메타데이터 포함)"""
-        from pathlib import Path
-        import os
-        
-        if not Path(file_path).exists():
-            raise FileNotFoundError(f"파일을 찾을 수 없습니다: {file_path}")
-        
-        # 파일 ID 생성
-        file_id = self.generate_file_id(file_path)
-        
-        # 파일 메타데이터
-        file_stat = os.stat(file_path)
-        file_info = {
-            'file_id': file_id,
-            'name': Path(file_path).name,
-            'path': file_path,
-            'size': file_stat.st_size,
-            'type': Path(file_path).suffix.lower(),
-            'content_hash': self.file_hashes.get(file_path),
-            'upload_timestamp': int(file_stat.st_mtime * 1000),
-            'processed': True
-        }
-        
-        # 처리된 파일 목록에 저장
-        self.processed_files[file_id] = file_info
-        
-        return file_info
     
     def is_duplicate_file(self, file_path: str, other_file_path: str) -> bool:
         """두 파일이 동일한지 해시로 확인"""
