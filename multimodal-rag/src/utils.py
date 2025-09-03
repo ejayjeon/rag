@@ -98,7 +98,7 @@ def safe_file_operation(operation: Callable, file_path: str, *args, **kwargs) ->
 
 # Ollama 서버 설정
 DEFAULT_OLLAMA_URL = "http://localhost:11434"
-NGROK_OLLAMA_URL = "https://9d503cf331b4.ngrok-free.app"
+NGROK_OLLAMA_URL = "https://72e0239167b6.ngrok-free.app"
 
 # 동적으로 ngrok URL을 업데이트할 수 있는 변수
 _current_ngrok_url = NGROK_OLLAMA_URL
@@ -178,7 +178,8 @@ def check_ollama_status(url: str = None) -> tuple[bool, str]:
         except:
             continue
     
-    return False, ""
+    # Streamlit Cloud 환경에서는 연결 실패로 간주하지만 앱은 계속 작동
+    return False, "연결 실패 (텍스트 처리는 가능)"
 
 def get_current_ollama_url() -> str:
     """현재 연결된 Ollama 서버 URL 반환

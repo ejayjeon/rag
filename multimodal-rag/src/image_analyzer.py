@@ -12,6 +12,14 @@ except ImportError:
     except ImportError:
         ChatOllama = None
 
+# OpenAI Vision 지원 추가
+try:
+    import openai
+    from openai import OpenAI
+except ImportError:
+    openai = None
+    OpenAI = None
+
 try:
     from PIL import Image
 except ImportError:
@@ -27,13 +35,28 @@ except ImportError:
 
 from typing import Optional, List
 import logging
+import base64
+import io
 
 class ImageAnalyzer:
     """이미지 분석 전용 클래스"""
     
-    def __init__(self, model_name: str = "llava"):
+    def __init__(
+        self, 
+        model_name: str = "llava", 
+        provider: str = "ollama",
+        api_key: Optional[str] = None
+    ):
         self.model_name = model_name
+        self.provider = provider
+        self.api_key = api_key
         self.logger = logging.getLogger(__name__)
+        
+        # OpenAI 클라이언트 초기화
+        if provider == "openai" and api_key and OpenAI:
+            self.openai_client = OpenAI(api_key=api_key)
+        else:
+            self.openai_client = None
         
         # 의존성 확인
         self._check_dependencies()
@@ -42,8 +65,15 @@ class ImageAnalyzer:
         """이미지 분석에 필요한 의존성 확인"""
         missing_deps = []
         
-        if not ollama and not ChatOllama:
-            missing_deps.append("ollama 또는 langchain_ollama")
+        if self.provider == "openai":
+            if not OpenAI or not openai:
+                missing_deps.append("openai")
+            if not self.api_key:
+                missing_deps.append("OpenAI API key")
+        elif self.provider == "ollama":
+            if not ollama and not ChatOllama:
+                missing_deps.append("ollama 또는 langchain_ollama")
+        
         if not Image:
             missing_deps.append("PIL (Pillow)")
         
@@ -75,7 +105,10 @@ class ImageAnalyzer:
         prompt = custom_prompt or default_prompt
         
         try:
-            if ollama:
+            if self.provider == "openai" and self.openai_client:
+                # OpenAI Vision API 사용
+                return self._analyze_with_openai(image_path, prompt)
+            elif self.provider == "ollama" and ollama:
                 # Ollama 사용
                 response = ollama.generate(
                     model=self.model_name,
@@ -94,6 +127,73 @@ class ImageAnalyzer:
             self.logger.error(f"이미지 분석 오류: {str(e)}")
             return f"이미지 분석 중 오류가 발생했습니다: {str(e)}"
     
+    def _analyze_with_openai(self, image_path: str, prompt: str) -> str:
+        """OpenAI Vision API를 사용한 이미지 분석"""
+        try:
+            # 이미지를 base64로 인코딩
+            base64_image = self._encode_image_to_base64(image_path)
+            
+            # OpenAI Vision API 호출
+            response = self.openai_client.chat.completions.create(
+                model=self.model_name,  # gpt-4-vision-preview 또는 gpt-4o
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{base64_image}",
+                                    "detail": "high"
+                                }
+                            }
+                        ]
+                    }
+                ],
+                max_tokens=1000,
+                temperature=0
+            )
+            
+            return response.choices[0].message.content.strip()
+            
+        except Exception as e:
+            self.logger.error(f"OpenAI Vision API 오류: {str(e)}")
+            return f"OpenAI Vision API 분석 중 오류가 발생했습니다: {str(e)}"
+    
+    def _encode_image_to_base64(self, image_path: str) -> str:
+        """이미지를 base64로 인코딩"""
+        try:
+            if not Image:
+                raise ImportError("PIL (Pillow) 라이브러리가 필요합니다")
+            
+            # PIL로 이미지 열기 및 최적화
+            with Image.open(image_path) as img:
+                # 이미지 크기 조정 (OpenAI API 제한에 맞춤)
+                max_size = (2048, 2048)  # OpenAI의 권장 최대 크기
+                img.thumbnail(max_size, Image.Resampling.LANCZOS)
+                
+                # RGB로 변환 (RGBA나 다른 모드 처리)
+                if img.mode in ('RGBA', 'LA', 'P'):
+                    background = Image.new('RGB', img.size, (255, 255, 255))
+                    if img.mode == 'P':
+                        img = img.convert('RGBA')
+                    background.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
+                    img = background
+                elif img.mode != 'RGB':
+                    img = img.convert('RGB')
+                
+                # JPEG 형태로 압축하여 base64 인코딩
+                buffer = io.BytesIO()
+                img.save(buffer, format='JPEG', quality=85, optimize=True)
+                buffer.seek(0)
+                
+                return base64.b64encode(buffer.getvalue()).decode('utf-8')
+                
+        except Exception as e:
+            self.logger.error(f"이미지 인코딩 오류: {str(e)}")
+            raise
+    
     def extract_text_from_image(self, image_path: str) -> str:
         """OCR을 통한 이미지에서 텍스트 추출"""
         # 파일 존재 확인
@@ -102,7 +202,13 @@ class ImageAnalyzer:
             raise FileNotFoundError(f"이미지 파일을 찾을 수 없습니다: {image_path}")
             
         try:
-            if pytesseract and Image:
+            if self.provider == "openai" and self.openai_client:
+                # OpenAI Vision API로 텍스트 추출
+                ocr_prompt = """이 이미지에서 텍스트를 정확히 추출해주세요. 
+                모든 텍스트를 읽어서 그대로 출력해주세요. 
+                텍스트가 없다면 '텍스트 없음'이라고 응답해주세요."""
+                return self._analyze_with_openai(image_path, ocr_prompt)
+            elif pytesseract and Image:
                 # Tesseract OCR 사용
                 image = Image.open(image_path)
                 text = pytesseract.image_to_string(image, lang='kor+eng')

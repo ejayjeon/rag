@@ -28,6 +28,12 @@ except ImportError:
     except ImportError:
         ChatOllama = None
 
+# OpenAI import 추가
+try:
+    from langchain_openai import ChatOpenAI
+except ImportError:
+    ChatOpenAI = None
+
 try:
     from langchain.schema import Document
 except ImportError:
@@ -63,7 +69,9 @@ class MultimodalRAG:
         embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2",
         llm_model: str = "llama2",
         vision_model: str = "llava",
-        base_url: str = "http://localhost:11434"
+        base_url: str = "http://localhost:11434",
+        llm_provider: str = "ollama",
+        openai_api_key: Optional[str] = None
     ):
         self.logger = logging.getLogger(__name__)
         
@@ -76,18 +84,45 @@ class MultimodalRAG:
         else:
             raise ImportError("HuggingFaceEmbeddings를 import할 수 없습니다. langchain_community 또는 langchain을 설치하세요.")
         
-        if ChatOllama:
+        # LLM 프로바이더에 따른 초기화
+        self.llm_provider = llm_provider
+        if llm_provider == "openai":
+            if not ChatOpenAI:
+                raise ImportError("ChatOpenAI를 import할 수 없습니다. langchain_openai를 설치하세요.")
+            if not openai_api_key:
+                raise ValueError("OpenAI를 사용하려면 API 키가 필요합니다.")
+            
+            self.llm = ChatOpenAI(
+                model="gpt-3.5-turbo",
+                temperature=0,
+                openai_api_key=openai_api_key
+            )
+        elif llm_provider == "ollama":
+            if not ChatOllama:
+                raise ImportError("ChatOllama를 import할 수 없습니다. langchain_ollama를 설치하세요.")
+            
             self.llm = ChatOllama(
                 model=llm_model,
                 temperature=0,
                 base_url=base_url
             )
         else:
-            raise ImportError("ChatOllama를 import할 수 없습니다. langchain_ollama를 설치하세요.")
+            raise ValueError(f"지원하지 않는 LLM 프로바이더: {llm_provider}")
         
         # 프로세서들
         self.pdf_processor = PDFProcessor()
-        self.image_analyzer = ImageAnalyzer(vision_model)
+        
+        # 이미지 분석기는 OpenAI 사용시에는 다르게 설정
+        if llm_provider == "openai":
+            # OpenAI Vision API 사용 (이미지 분석에는 gpt-4-vision-preview 필요)
+            self.image_analyzer = ImageAnalyzer(
+                model_name=vision_model, 
+                provider="openai",
+                api_key=openai_api_key
+            )
+        else:
+            # Ollama LLaVA 사용
+            self.image_analyzer = ImageAnalyzer(model_name=vision_model)
         
         # 상태
         self.vectorstore: Optional[Chroma] = None
