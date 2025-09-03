@@ -3,6 +3,7 @@ import streamlit as st
 import tempfile
 from pathlib import Path
 import os
+import time
 
 # .env 파일 지원 추가
 try:
@@ -108,12 +109,24 @@ with st.sidebar:
     
     # OpenAI API Key 입력 (OpenAI 선택시에만 표시)
     if llm_provider == "openai":
-        # 환경변수에서 API 키 확인
-        env_api_key = os.getenv('OPENAI_API_KEY')
+        # API 키 확인 (우선순위: Streamlit Secrets > 환경변수)
+        auto_api_key = None
+        key_source = None
         
-        # 자동으로 발견된 키 정보
-        auto_api_key = env_api_key
-        key_source = "환경변수"
+        # 1. Streamlit Cloud Secrets 확인 (배포 환경)
+        try:
+            if hasattr(st, 'secrets') and 'OPENAI_API_KEY' in st.secrets:
+                auto_api_key = st.secrets["OPENAI_API_KEY"]
+                key_source = "Streamlit Cloud Secrets"
+        except Exception:
+            pass
+        
+        # 2. 환경변수 확인 (로컬 환경)
+        if not auto_api_key:
+            env_api_key = os.getenv('OPENAI_API_KEY')
+            if env_api_key:
+                auto_api_key = env_api_key
+                key_source = "환경변수"
         
         # API 키 사용 방법 선택
         if auto_api_key:
@@ -344,19 +357,66 @@ with st.sidebar:
     
     elif llm_provider == "openai":
         if st.session_state.get('openai_verified', False):
-            # OpenAI 모델 상태
-            st.success("🧠 GPT-3.5-turbo 준비됨 (텍스트 생성)")
-            st.success("👁️ GPT-4-Vision 준비됨 (이미지 분석)")
-            
-            # 사용 가능한 기능 안내
-            with st.expander("📋 OpenAI 멀티모달 기능"):
-                st.info("• 🤖 텍스트 생성: GPT-3.5-turbo")
-                st.info("• 👁️ 이미지 분석: GPT-4-vision-preview")
-                st.info("• 🔍 이미지 OCR: 텍스트 추출 가능")
-                st.info("• 📊 차트/그래프 이해: 복잡한 시각 데이터 분석")
-                st.info("• 🌍 다국어 지원: 한국어 포함 100+ 언어")
-                st.info("• ⚡ 빠른 응답속도")
-                st.info("• 🎯 높은 품질 & 정확도")
+            # OpenAI 모델 상태 및 선택
+            try:
+                import openai
+                client = openai.OpenAI(api_key=st.session_state.openai_api_key)
+                available_models = client.models.list()
+                
+                # 사용 가능한 모델 필터링
+                chat_models = [m.id for m in available_models.data if any(x in m.id for x in ['gpt-', 'text-'])]
+                vision_models = [m.id for m in available_models.data if 'vision' in m.id.lower()]
+                
+                if chat_models:
+                    st.success(f"🧠 텍스트 모델: {len(chat_models)}개 준비됨")
+                    
+                    # 현재 선택된 모델 표시
+                    if 'current_language_model' in st.session_state:
+                        current_model = st.session_state.current_language_model
+                        if 'gpt-4' in current_model:
+                            st.success(f"🚀 현재 선택: {current_model} (최고 품질)")
+                        elif 'gpt-3.5' in current_model:
+                            st.info(f"⚡ 현재 선택: {current_model} (빠른 속도)")
+                        else:
+                            st.info(f"🔧 현재 선택: {current_model}")
+                    
+                    # 모델 선택 드롭다운
+                    selected_model = st.selectbox(
+                        "🤖 텍스트 모델 선택",
+                        options=chat_models,
+                        index=0,
+                        help="사용할 텍스트 생성 모델을 선택하세요"
+                    )
+                    
+                    # 모델별 특징 안내
+                    with st.expander("📋 모델별 특징", expanded=False):
+                        for model in chat_models[:5]:  # 처음 5개만 표시
+                            if 'gpt-4' in model:
+                                st.success(f"🚀 {model}: 최고 품질, 높은 비용")
+                            elif 'gpt-3.5' in model:
+                                st.info(f"⚡ {model}: 빠른 속도, 적당한 비용")
+                            else:
+                                st.info(f"🔧 {model}: 특수 용도")
+                
+                if vision_models:
+                    st.success(f"👁️ Vision 모델: {len(vision_models)}개 준비됨")
+                    with st.expander("📋 Vision 모델 목록", expanded=False):
+                        for model in vision_models:
+                            st.info(f"👁️ {model}")
+                
+                # 사용 가능한 기능 안내
+                with st.expander("📋 OpenAI 멀티모달 기능", expanded=False):
+                    st.info("• 🤖 텍스트 생성: GPT-3.5/4 시리즈")
+                    st.info("• 👁️ 이미지 분석: GPT-4-vision-preview")
+                    st.info("• 🔍 이미지 OCR: 텍스트 추출 가능")
+                    st.info("• 📊 차트/그래프 이해: 복잡한 시각 데이터 분석")
+                    st.info("• 🌍 다국어 지원: 한국어 포함 100+ 언어")
+                    st.info("• ⚡ 빠른 응답속도")
+                    st.info("• 🎯 높은 품질 & 정확도")
+                    
+            except Exception as e:
+                st.warning(f"⚠️ 모델 정보를 가져올 수 없습니다: {str(e)}")
+                st.info("💡 API 키가 올바른지 확인해주세요")
         else:
             st.warning("⚠️ OpenAI API 키 검증이 필요합니다")
             st.info("💡 위에서 유효한 API 키를 입력하세요")
@@ -368,6 +428,39 @@ with st.sidebar:
     • **PDF**: 텍스트 + 이미지 추출
     • **이미지**: .jpg, .png, .gif 등
     """)
+    
+    # 시스템 정보 섹션
+    st.markdown("---")
+    st.markdown("### 📋 시스템 정보")
+    
+    if llm_provider == "ollama":
+        st.info("""
+        **🔧 기술 스택:**
+        • LangChain + ChromaDB
+        • Sentence Transformers
+        • Ollama (로컬 LLM)
+        """)
+        
+        st.info("""
+        **💡 팁:**
+        • 여러 파일을 동시에 업로드 가능
+        • Ollama 서버 실행 필요
+        • 이미지 분석은 LLaVA 모델 필요
+        """)
+    else:
+        st.info("""
+        **🔧 기술 스택:**
+        • LangChain + ChromaDB
+        • Sentence Transformers
+        • OpenAI API (클라우드 LLM)
+        """)
+        
+        st.info("""
+        **💡 팁:**
+        • 여러 파일을 동시에 업로드 가능
+        • 인터넷 연결 필요
+        • API 사용료 발생 (토큰당 과금)
+        """)
 
 # RAG 시스템 초기화 (조건부)
 should_initialize = False
@@ -422,9 +515,43 @@ if 'rag_system' not in st.session_state and should_initialize:
                         st.info(f"🤖 언어 모델 '{language_model}'을 사용합니다.")
             
             elif llm_provider == "openai":
-                # OpenAI: GPT-3.5-turbo 사용
-                language_model = "gpt-3.5-turbo"
-                st.success(f"🤖 OpenAI 모델 '{language_model}'을 사용합니다!")
+                # OpenAI: 사용 가능한 모델 중에서 선택
+                try:
+                    import openai
+                    client = openai.OpenAI(api_key=openai_api_key)
+                    available_models = client.models.list()
+                    
+                    # 사용 가능한 모델 필터링 (ChatGPT 관련 모델 우선)
+                    chat_models = [m.id for m in available_models.data if any(x in m.id for x in ['gpt-', 'text-'])]
+                    
+                    if chat_models:
+                        # 모델 선택 드롭다운
+                        selected_model = st.selectbox(
+                            "🤖 OpenAI 모델 선택",
+                            options=chat_models,
+                            index=0,  # 기본값: 첫 번째 모델
+                            help="사용할 OpenAI 모델을 선택하세요. GPT-4는 더 정확하지만 비용이 높습니다."
+                        )
+                        language_model = selected_model
+                        st.success(f"🤖 OpenAI 모델 '{language_model}'을 선택했습니다!")
+                        
+                        # 모델별 특징 안내
+                        if 'gpt-4' in language_model:
+                            st.info("🚀 GPT-4: 최고 품질, 높은 비용")
+                        elif 'gpt-3.5' in language_model:
+                            st.info("⚡ GPT-3.5: 빠른 속도, 적당한 비용")
+                        else:
+                            st.info("🔧 기타 모델: 특수 용도")
+                    else:
+                        # 모델을 가져올 수 없는 경우 기본값 사용
+                        language_model = "gpt-3.5-turbo"
+                        st.warning(f"⚠️ 모델 목록을 가져올 수 없어 기본값 '{language_model}'을 사용합니다.")
+                        
+                except Exception as e:
+                    # 오류 발생 시 기본값 사용
+                    language_model = "gpt-3.5-turbo"
+                    st.warning(f"⚠️ 모델 선택 중 오류 발생: {str(e)}")
+                    st.info(f"기본값 '{language_model}'을 사용합니다.")
             
             # OpenAI API 키 설정 (우선순위: 검증된 키 > 환경변수)
             openai_api_key = None
@@ -441,6 +568,10 @@ if 'rag_system' not in st.session_state and should_initialize:
                         st.warning("⏳ OpenAI API 키 설정을 기다리는 중...")
                         st.info("💡 위의 사이드바에서 API 키를 설정해주세요")
                         st.stop()
+                
+                # 선택된 모델을 세션에 저장
+                if 'selected_model' in locals():
+                    st.session_state.selected_openai_model = selected_model
             
             st.session_state.rag_system = MultimodalRAG(
                 llm_model=language_model,
@@ -464,6 +595,48 @@ if 'rag_system' not in st.session_state:
     else:
         st.info("⚙️ 시스템 초기화를 위해 잠시만 기다려주세요...")
     st.stop()
+
+# 세션 상태 초기화 (먼저 실행)
+if 'chat_history' not in st.session_state:
+    st.session_state.chat_history = []
+
+if 'uploaded_files' not in st.session_state:
+    st.session_state.uploaded_files = []
+
+if 'file_contents' not in st.session_state:
+    st.session_state.file_contents = {}
+
+if 'conversation_context' not in st.session_state:
+    st.session_state.conversation_context = {
+        'uploaded_files': [],
+        'file_summaries': {},
+        'last_query': None,
+        'session_start': time.time()
+    }
+
+# 컨텍스트 정보 표시
+if st.session_state.uploaded_files:
+    st.markdown("### 🧠 세션 컨텍스트")
+    with st.expander("📊 현재 상태", expanded=False):
+        context = st.session_state.conversation_context
+        st.info(f"⏰ 세션 시작: {time.strftime('%H:%M:%S', time.localtime(context['session_start']))}")
+        st.info(f"📁 업로드된 파일: {len(st.session_state.uploaded_files)}개")
+        st.info(f"💬 대화 수: {len(st.session_state.chat_history)}개")
+        
+        if context['last_query']:
+            st.info(f"🔍 마지막 질문: {context['last_query'][:50]}...")
+        
+        # 컨텍스트 초기화 버튼
+        if st.button("🔄 컨텍스트 초기화", type="secondary"):
+            st.session_state.conversation_context = {
+                'uploaded_files': [],
+                'file_summaries': {},
+                'last_query': None,
+                'session_start': time.time()
+            }
+            st.session_state.chat_history = []
+            st.success("✅ 컨텍스트가 초기화되었습니다!")
+            st.rerun()
 
 # 파일 업로드 섹션
 st.markdown("## 📁 파일 업로드")
@@ -505,6 +678,31 @@ if uploaded_files and st.button("📚 문서 처리 시작", type="primary"):
                 st.session_state.rag_system.add_text_document(temp_path)
             else:
                 raise ValueError(f"지원하지 않는 파일 형식: {suffix}")
+            
+            # 파일 히스토리에 추가
+            file_info = {
+                'name': uploaded_file.name,
+                'type': suffix.lower(),
+                'size': len(uploaded_file.getvalue()),
+                'upload_time': time.time(),
+                'processed': True
+            }
+            st.session_state.uploaded_files.append(file_info)
+            
+            # 파일 내용 요약 저장 (텍스트 파일의 경우)
+            if suffix.lower() in ['.txt', '.md']:
+                try:
+                    with open(temp_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                        # 간단한 요약 생성 (첫 200자)
+                        summary = content[:200] + "..." if len(content) > 200 else content
+                        st.session_state.file_contents[uploaded_file.name] = {
+                            'type': 'text',
+                            'summary': summary,
+                            'full_content': content
+                        }
+                except Exception as e:
+                    st.warning(f"파일 내용 읽기 실패: {str(e)}")
             
             successful_files.append(uploaded_file.name)
             
@@ -548,10 +746,40 @@ if uploaded_files and st.button("📚 문서 처리 시작", type="primary"):
             st.metric("🖼️ 이미지", status.get('image_documents', 0))
         with col3:
             st.metric("🧠 총 문서", status.get('total_documents', 0))
+    
+    # 파일 히스토리 표시
+    if st.session_state.uploaded_files:
+        st.markdown("### 📚 업로드된 파일 히스토리")
+        with st.expander("📋 파일 목록 및 요약", expanded=True):
+            for i, file_info in enumerate(st.session_state.uploaded_files):
+                col1, col2, col3 = st.columns([2, 1, 1])
+                
+                with col1:
+                    file_icon = "📄" if file_info['type'] in ['.txt', '.md'] else "🖼️" if file_info['type'] in ['.jpg', '.jpeg', '.png', '.gif', '.bmp'] else "📕"
+                    st.write(f"{file_icon} **{file_info['name']}**")
+                
+                with col2:
+                    st.write(f"**타입**: {file_info['type']}")
+                
+                with col3:
+                    size_kb = file_info['size'] / 1024
+                    st.write(f"**크기**: {size_kb:.1f} KB")
+                
+                # 파일 내용 요약 표시 (텍스트 파일의 경우)
+                if file_info['name'] in st.session_state.file_contents:
+                    content_info = st.session_state.file_contents[file_info['name']]
+                    if content_info['type'] == 'text':
+                        st.text_area(
+                            f"📝 {file_info['name']} 내용 요약",
+                            content_info['summary'],
+                            height=80,
+                            key=f"summary_{i}",
+                            disabled=True
+                        )
+                
+                st.markdown("---")
 
-# 채팅 히스토리 초기화
-if 'chat_history' not in st.session_state:
-    st.session_state.chat_history = []
+# 세션 상태는 이미 위에서 초기화됨
 
 # 질문 섹션
 if st.session_state.get('documents_added', False):
@@ -563,6 +791,14 @@ if st.session_state.get('documents_added', False):
         if message['role'] == 'user':
             with st.chat_message("user"):
                 st.write(message['content'])
+                
+                # 컨텍스트 정보 표시 (사용자 메시지)
+                if 'context' in message:
+                    with st.expander("🔍 컨텍스트 정보", expanded=False):
+                        context = message['context']
+                        st.info(f"📁 업로드된 파일: {context['uploaded_files']}개")
+                        st.info(f"📄 파일 타입: {', '.join(context['file_types'])}")
+                        st.info(f"⏱️ 세션 시간: {context['session_duration']:.1f}초")
         else:
             with st.chat_message("assistant"):
                 st.write(message['content'])
@@ -574,6 +810,11 @@ if st.session_state.get('documents_added', False):
                         st.metric("🎯 신뢰도", f"{message['confidence']:.1%}")
                     with col2:
                         st.metric("📚 참조 소스", message.get('source_count', 0))
+                
+                # 컨텍스트 사용 정보 표시
+                if 'context_used' in message:
+                    context_used = message['context_used']
+                    st.success(f"✅ 컨텍스트 인식: {context_used['files_referenced']}개 파일 참조됨")
                 
                 # 참조 소스가 있으면 표시
                 if 'sources' in message and message['sources']:
@@ -621,27 +862,53 @@ if st.session_state.get('documents_added', False):
     
     # 새로운 질문 입력 (채팅 형태)
     if prompt := st.chat_input("질문을 입력하세요..."):
+        # 컨텍스트 정보 업데이트
+        st.session_state.conversation_context['last_query'] = prompt
+        
         # 사용자 질문을 채팅 히스토리에 추가
-        st.session_state.chat_history.append({
+        user_message = {
             'role': 'user',
             'content': prompt,
-            'timestamp': len(st.session_state.chat_history)
-        })
+            'timestamp': len(st.session_state.chat_history),
+            'context': {
+                'uploaded_files': len(st.session_state.uploaded_files),
+                'file_types': [f['type'] for f in st.session_state.uploaded_files],
+                'session_duration': time.time() - st.session_state.conversation_context['session_start']
+            }
+        }
+        st.session_state.chat_history.append(user_message)
         
         # 답변 생성
         with st.spinner("답변 생성 중..."):
             try:
-                result = st.session_state.rag_system.search(prompt)
+                # 컨텍스트가 포함된 질문 생성
+                context_prompt = f"""
+                컨텍스트 정보:
+                - 업로드된 파일 수: {len(st.session_state.uploaded_files)}
+                - 파일 타입: {', '.join([f['type'] for f in st.session_state.uploaded_files])}
+                - 이전 대화 수: {len(st.session_state.chat_history) - 1}
+                
+                사용자 질문: {prompt}
+                
+                위의 컨텍스트를 고려하여 답변해주세요. 업로드된 파일들이 있다면 그 내용을 참고하여 답변하세요.
+                """
+                
+                result = st.session_state.rag_system.search(context_prompt)
                 
                 # AI 답변을 채팅 히스토리에 추가
-                st.session_state.chat_history.append({
+                assistant_message = {
                     'role': 'assistant',
                     'content': result.answer,
                     'confidence': result.confidence,
                     'source_count': len(result.sources),
                     'sources': result.sources,
-                    'timestamp': len(st.session_state.chat_history)
-                })
+                    'timestamp': len(st.session_state.chat_history),
+                    'context_used': {
+                        'files_referenced': len(result.sources),
+                        'query_understood': True
+                    }
+                }
+                st.session_state.chat_history.append(assistant_message)
                 
                 # 페이지 새로고침으로 최신 대화 표시
                 st.rerun()
@@ -691,40 +958,4 @@ else:
             • 멀티모달 통합 검색
             """)
 
-# 하단 정보
-st.markdown("---")
-st.markdown("### 📋 시스템 정보")
-
-col1, col2 = st.columns(2)
-
-with col1:
-    if llm_provider == "ollama":
-        st.info("""
-        **🔧 기술 스택:**
-        • LangChain + ChromaDB
-        • Sentence Transformers
-        • Ollama (로컬 LLM)
-        """)
-    else:
-        st.info("""
-        **🔧 기술 스택:**
-        • LangChain + ChromaDB
-        • Sentence Transformers
-        • OpenAI API (클라우드 LLM)
-        """)
-
-with col2:
-    if llm_provider == "ollama":
-        st.info("""
-        **💡 팁:**
-        • 여러 파일을 동시에 업로드 가능
-        • Ollama 서버 실행 필요
-        • 이미지 분석은 LLaVA 모델 필요
-        """)
-    else:
-        st.info("""
-        **💡 팁:**
-        • 여러 파일을 동시에 업로드 가능
-        • 인터넷 연결 필요
-        • API 사용료 발생 (토큰당 과금)
-        """)
+# 하단 정보는 사이드바로 이동됨
