@@ -21,28 +21,25 @@ except ImportError:
 # src 모듈 안전 import
 try:
     from src.multimodal_rag import MultimodalRAG
+    from src.image_analyzer import ImageAnalyzer
     MULTIMODAL_RAG_AVAILABLE = True
 except ImportError as e:
     MultimodalRAG = None
+    ImageAnalyzer = None
     MULTIMODAL_RAG_AVAILABLE = False
     IMPORT_ERROR = str(e)
 
-# try:
-from src.utils import (
-    check_ollama_status, 
-    get_ollama_models, 
-    get_current_ollama_url, 
-    test_ngrok_connection,
-    update_ngrok_url,
-    get_current_ngrok_url,
-    call_ollama_api,
-    generate_ollama_response
-)
-# except ImportError:
-#     def check_ollama_status():
-#         return False
-#     def get_ollama_models():
-#         return []
+# utils에서 필요한 함수만 import
+try:
+    from src.utils import (
+        check_ollama_status, 
+        get_ollama_models
+    )
+except ImportError:
+    def check_ollama_status():
+        return False, None
+    def get_ollama_models():
+        return []
 
 
 # Streamlit 페이지 설정
@@ -54,10 +51,9 @@ st.set_page_config(
 
 st.title("🖼️ 멀티모달 RAG - 텍스트 + 이미지 통합 검색")
 
-# 함수 정의
+# OpenAI API 키 검증 함수
 def _verify_openai_key(api_key: str):
     """OpenAI API 키 검증 함수"""
-    # API 키 형식 검증
     if not api_key.startswith('sk-'):
         st.error("❌ API 키는 'sk-'로 시작해야 합니다")
         st.session_state.openai_verified = False
@@ -67,7 +63,6 @@ def _verify_openai_key(api_key: str):
         st.session_state.openai_verified = False
         return
     
-    # 실시간 연결 테스트
     with st.spinner("API 키 검증 중..."):
         try:
             import openai
@@ -75,17 +70,8 @@ def _verify_openai_key(api_key: str):
             models = client.models.list()
             st.success("✅ OpenAI API 키 검증 성공!")
             st.session_state.openai_verified = True
-        except openai.AuthenticationError:
-            st.error("❌ 유효하지 않은 API 키입니다")
-            st.session_state.openai_verified = False
-        except openai.PermissionDeniedError:
-            st.error("❌ API 키 권한이 부족합니다")
-            st.session_state.openai_verified = False
-        except openai.RateLimitError:
-            st.warning("⚠️ 요청 한도를 초과했습니다. 잠시 후 다시 시도하세요")
-            st.session_state.openai_verified = False
         except Exception as e:
-            st.error(f"❌ 연결 오류: {str(e)}")
+            st.error(f"❌ API 키 검증 실패: {str(e)}")
             st.session_state.openai_verified = False
 
 # 의존성 확인
@@ -280,56 +266,16 @@ with st.sidebar:
         else:
             st.warning("🔑 OpenAI API 키를 입력해주세요")
     
-    # # ngrok 연결 테스트 및 URL 업데이트
-    # st.markdown("### 🌐 ngrok 설정")
+
     
-    # # 현재 ngrok URL 표시
-    # current_ngrok_url = get_current_ngrok_url()
-    # st.info(f"현재 ngrok URL: `{current_ngrok_url}`")
-    
-    # # ngrok URL 업데이트
-    # new_ngrok_url = st.text_input(
-    #     "새로운 ngrok URL 입력",
-    #     value=current_ngrok_url,
-    #     help="ngrok URL이 변경되었을 때 여기에 입력하세요"
-    # )
-    
-    # if st.button("🔄 ngrok URL 업데이트"):
-    #     if new_ngrok_url != current_ngrok_url:
-    #         update_ngrok_url(new_ngrok_url)
-    #         st.success(f"ngrok URL이 업데이트되었습니다: {new_ngrok_url}")
-    #         st.rerun()
-    
-    # # ngrok 연결 테스트 버튼
-    # if st.button("🔍 ngrok 연결 테스트"):
-    #     with st.spinner("ngrok 연결 테스트 중..."):
-    #         ngrok_success, ngrok_message = test_ngrok_connection()
-    #         if ngrok_success:
-    #             st.success(ngrok_message)
-    #         else:
-    #             st.error(ngrok_message)
-    #             st.info("💡 ngrok URL이 변경되었을 수 있습니다. 위의 입력창에 새로운 URL을 입력하세요.")
-    
-    # 프로바이더별 API 테스트
+    # 프로바이더별 API 상태
     if llm_provider == "ollama":
-        st.markdown("### 🧪 Ollama API 테스트")
-        if st.button("🔍 API 연결 테스트"):
-            with st.spinner("API 연결 테스트 중..."):
-                try:
-                    # 모델 목록 가져오기 테스트
-                    models_response = call_ollama_api('api/tags')
-                    if models_response and 'models' in models_response:
-                        st.success(f"✅ API 연결 성공! 모델 {len(models_response['models'])}개 발견")
-                        # 모델 목록 표시
-                        with st.expander("📋 사용 가능한 모델"):
-                            for model in models_response['models']:
-                                model_name = model.get('name', 'Unknown')
-                                st.text(f"• {model_name}")
-                    else:
-                        st.error("❌ API 연결 실패")
-                        st.info("💡 Ollama 서버가 실행 중인지 확인하세요")
-                except Exception as e:
-                    st.error(f"❌ API 테스트 오류: {str(e)}")
+        st.markdown("### 🦙 Ollama 상태")
+        ollama_status, _ = check_ollama_status()
+        if ollama_status:
+            st.success("✅ Ollama 서버 연결됨")
+        else:
+            st.warning("⚠️ Ollama 서버에 연결할 수 없습니다")
     elif llm_provider == "openai":
         st.markdown("### 🤖 OpenAI API 상태")
         if st.session_state.get('openai_verified', False):
@@ -341,49 +287,54 @@ with st.sidebar:
     st.markdown("### 🤖 모델 상태")
     
     if llm_provider == "ollama":
-        models = get_ollama_models()
         try:
-            ollama_status, _ = check_ollama_status()
-            if ollama_status:
-                # Vision 모델 (이미지 분석용)
-                if 'llava' in str(models).lower():
-                    st.success("👁️ LLaVA 모델 준비됨 (이미지 분석 가능)")
-                else:
-                    st.warning("⚠️ LLaVA 모델 없음 (이미지 분석 불가)")
-                    st.code("ollama pull llava")
-                
-                # 언어 모델 감지 (한국어 우선)
-                language_models = []
-                for model in models:
-                    if any(keyword in model.lower() for keyword in ['llama', 'gemma', 'qwen', 'mistral', 'code']):
-                        language_models.append(model)
-                
-                if language_models:
-                    st.success("🧠 텍스트 언어모델 준비됨")
-                    # 현재 사용 중인 언어 모델 표시
-                    if 'current_language_model' in st.session_state:
-                        current_model = st.session_state.current_language_model
-                        if 'gemma2' in current_model.lower() or 'qwen' in current_model.lower():
-                            st.success(f"🇰🇷 한국어 우선: {current_model}")
-                        else:
-                            st.info(f"현재 사용: {current_model}")
+            models = get_ollama_models()
+            # models가 None이 아닌지 확인
+            if models and isinstance(models, list):
+                ollama_status, _ = check_ollama_status()
+                if ollama_status:
+                    # Vision 모델 (이미지 분석용)
+                    if 'llava' in str(models).lower():
+                        st.success("👁️ LLaVA 모델 준비됨 (이미지 분석 가능)")
+                    else:
+                        st.warning("⚠️ LLaVA 모델 없음 (이미지 분석 불가)")
+                        st.code("ollama pull llava")
                     
-                    # 사용 가능한 언어 모델 목록 표시
-                    with st.expander("📋 사용 가능한 Ollama 모델"):
-                        for model in language_models:
-                            if 'gemma2' in model.lower() or 'qwen' in model.lower():
-                                st.success(f"🇰🇷 {model} (한국어 우수)")
-                            elif 'llama' in model.lower():
-                                st.info(f"🤖 {model} (영어 중심)")
+                    # 언어 모델 감지 (한국어 우선)
+                    language_models = []
+                    for model in models:
+                        if any(keyword in model.lower() for keyword in ['llama', 'gemma', 'qwen', 'mistral', 'code']):
+                            language_models.append(model)
+                    
+                    if language_models:
+                        st.success("🧠 텍스트 언어모델 준비됨")
+                        # 현재 사용 중인 언어 모델 표시
+                        if 'current_language_model' in st.session_state:
+                            current_model = st.session_state.current_language_model
+                            if 'gemma2' in current_model.lower() or 'qwen' in current_model.lower():
+                                st.success(f"🇰🇷 한국어 우선: {current_model}")
                             else:
-                                st.info(f"🌍 {model}")
+                                st.info(f"현재 사용: {current_model}")
+                        
+                        # 사용 가능한 언어 모델 목록 표시
+                        with st.expander("📋 사용 가능한 Ollama 모델"):
+                            for model in language_models:
+                                if 'gemma2' in model.lower() or 'qwen' in model.lower():
+                                    st.success(f"🇰🇷 {model} (한국어 우수)")
+                                elif 'llama' in model.lower():
+                                    st.info(f"🤖 {model} (영어 중심)")
+                                else:
+                                    st.info(f"🌍 {model}")
+                    else:
+                        st.warning("⚠️ 언어모델 없음")
+                        st.code("ollama pull gemma2:9b")
+                        st.info("💡 한국어 지원을 위해 gemma2:9b 모델을 권장합니다.")
                 else:
-                    st.warning("⚠️ 언어모델 없음")
-                    st.code("ollama pull gemma2:9b")
-                    st.info("💡 한국어 지원을 위해 gemma2:9b 모델을 권장합니다.")
+                    st.warning("⚠️ Ollama 서버에 연결할 수 없습니다")
+                    st.info("💡 OpenAI로 전환하시면 모든 기능을 사용할 수 있습니다")
             else:
-                st.warning("⚠️ Ollama 서버에 연결할 수 없습니다")
-                st.info("💡 OpenAI로 전환하시면 모든 기능을 사용할 수 있습니다")
+                st.warning("⚠️ Ollama 모델 목록을 가져올 수 없습니다")
+                st.info("💡 Ollama 서버 상태를 확인해주세요")
         except Exception as e:
             st.error(f"❌ 모델 상태 확인 오류: {str(e)}")
     
@@ -395,9 +346,16 @@ with st.sidebar:
                 client = openai.OpenAI(api_key=st.session_state.openai_api_key)
                 available_models = client.models.list()
                 
-                # 사용 가능한 모델 필터링
-                chat_models = [m.id for m in available_models.data if any(x in m.id for x in ['gpt-', 'text-'])]
-                vision_models = [m.id for m in available_models.data if 'vision' in m.id.lower()]
+                # available_models가 None이 아닌지 확인
+                if available_models and hasattr(available_models, 'data') and available_models.data:
+                    # 사용 가능한 모델 필터링
+                    chat_models = [m.id for m in available_models.data if any(x in m.id for x in ['gpt-', 'text-'])]
+                    vision_models = [m.id for m in available_models.data if 'vision' in m.id.lower()]
+                else:
+                    st.warning("⚠️ 모델 목록을 가져올 수 없습니다")
+                    st.info("💡 API 응답이 올바르지 않습니다")
+                    chat_models = []
+                    vision_models = []
                 
                 if chat_models:
                     st.success(f"🧠 텍스트 모델: {len(chat_models)}개 준비됨")
@@ -678,32 +636,55 @@ if 'conversation_context' not in st.session_state:
         'uploaded_files': [],
         'file_summaries': {},
         'last_query': None,
-        'session_start': time.time()
+        'session_start': time.time(),
+        'conversation_memory': [],  # 대화 기억
+        'file_references': {},      # 파일별 참조 기록
+        'query_context': {}         # 질문별 컨텍스트
     }
 
-# 컨텍스트 정보 표시
-if st.session_state.uploaded_files:
-    st.markdown("### 🧠 세션 컨텍스트")
-    with st.expander("📊 현재 상태", expanded=False):
-        context = st.session_state.conversation_context
-        st.info(f"⏰ 세션 시작: {time.strftime('%H:%M:%S', time.localtime(context['session_start']))}")
-        st.info(f"📁 업로드된 파일: {len(st.session_state.uploaded_files)}개")
-        st.info(f"💬 대화 수: {len(st.session_state.chat_history)}개")
-        
-        if context['last_query']:
-            st.info(f"🔍 마지막 질문: {context['last_query'][:50]}...")
-        
-        # 컨텍스트 초기화 버튼
-        if st.button("🔄 컨텍스트 초기화", type="secondary"):
-            st.session_state.conversation_context = {
-                'uploaded_files': [],
-                'file_summaries': {},
-                'last_query': None,
-                'session_start': time.time()
-            }
-            st.session_state.chat_history = []
-            st.success("✅ 컨텍스트가 초기화되었습니다!")
-            st.rerun()
+    # 컨텍스트 정보 표시
+    if st.session_state.uploaded_files:
+        st.markdown("### 🧠 세션 컨텍스트")
+        with st.expander("📊 현재 상태", expanded=False):
+            context = st.session_state.conversation_context
+            st.info(f"⏰ 세션 시작: {time.strftime('%H:%M:%S', time.localtime(context['session_start']))}")
+            st.info(f"📁 업로드된 파일: {len(st.session_state.uploaded_files)}개")
+            st.info(f"💬 대화 수: {len(st.session_state.chat_history)}개")
+            
+            if context['last_query']:
+                st.info(f"🔍 마지막 질문: {context['last_query'][:50]}...")
+            
+            # 파일 참조 통계
+            if context.get('file_references'):
+                total_references = sum(ref['reference_count'] for ref in context['file_references'].values())
+                st.info(f"📚 총 파일 참조: {total_references}회")
+                
+                # 가장 많이 참조된 파일
+                most_referenced = max(context['file_references'].items(), key=lambda x: x[1]['reference_count'])
+                if most_referenced[1]['reference_count'] > 0:
+                    st.success(f"⭐ 가장 많이 참조: {most_referenced[1]['name']} ({most_referenced[1]['reference_count']}회)")
+            
+            # 최근 대화 요약
+            if context.get('conversation_memory'):
+                recent_memory = context['conversation_memory'][-3:]  # 최근 3개
+                st.markdown("**🔄 최근 대화 요약:**")
+                for i, memory in enumerate(recent_memory):
+                    st.text(f"{i+1}. {memory['context_summary']}")
+            
+            # 컨텍스트 초기화 버튼
+            if st.button("🔄 컨텍스트 초기화", type="secondary"):
+                st.session_state.conversation_context = {
+                    'uploaded_files': [],
+                    'file_summaries': {},
+                    'last_query': None,
+                    'session_start': time.time(),
+                    'conversation_memory': [],
+                    'file_references': {},
+                    'query_context': {}
+                }
+                st.session_state.chat_history = []
+                st.success("✅ 컨텍스트가 초기화되었습니다!")
+                st.rerun()
 
 # 파일 업로드 섹션
 st.markdown("## 📁 파일 업로드")
@@ -736,6 +717,34 @@ if uploaded_files and st.button("📚 문서 처리 시작", type="primary"):
                 tmp_file.write(uploaded_file.getvalue())
                 temp_path = tmp_file.name
             
+            # ImageAnalyzer를 사용하여 파일 정보 생성
+            if suffix.lower() in ['.jpg', '.jpeg', '.png', '.gif', '.bmp']:
+                # 이미지 파일인 경우 ImageAnalyzer 사용
+                if 'image_analyzer' not in st.session_state:
+                    st.session_state.image_analyzer = ImageAnalyzer(
+                        provider=st.session_state.get('llm_provider', 'ollama'),
+                        model_name=st.session_state.get('vision_model', 'llava')
+                    )
+                
+                file_info = st.session_state.image_analyzer.get_file_info(temp_path)
+            else:
+                # 텍스트/PDF 파일인 경우 기본 정보 생성
+                file_content = uploaded_file.getvalue()
+                import hashlib
+                file_content_hash = hashlib.md5(file_content).hexdigest()[:12]
+                timestamp = int(time.time() * 1000)
+                
+                file_info = {
+                    'name': uploaded_file.name,
+                    'type': suffix.lower(),
+                    'size': len(file_content),
+                    'upload_time': time.time(),
+                    'processed': True,
+                    'file_id': f"{uploaded_file.name}_{file_content_hash}_{timestamp}",
+                    'content_hash': file_content_hash,
+                    'upload_timestamp': timestamp
+                }
+            
             # 파일 타입에 따른 처리
             if suffix.lower() == '.pdf':
                 st.session_state.rag_system.add_pdf_document(temp_path)
@@ -745,18 +754,19 @@ if uploaded_files and st.button("📚 문서 처리 시작", type="primary"):
                 st.session_state.rag_system.add_text_document(temp_path)
             else:
                 raise ValueError(f"지원하지 않는 파일 형식: {suffix}")
-            
-            # 파일 히스토리에 추가
-            file_info = {
-                'name': uploaded_file.name,
-                'type': suffix.lower(),
-                'size': len(uploaded_file.getvalue()),
-                'upload_time': time.time(),
-                'processed': True
-            }
             st.session_state.uploaded_files.append(file_info)
             
-            # 파일 내용 요약 저장 (텍스트 파일의 경우)
+            # 컨텍스트에 파일 정보 추가
+            st.session_state.conversation_context['uploaded_files'].append(file_info)
+            st.session_state.conversation_context['file_references'][file_info['file_id']] = {
+                'name': uploaded_file.name,
+                'type': suffix.lower(),
+                'upload_time': time.time(),
+                'reference_count': 0,  # 참조 횟수
+                'last_referenced': None  # 마지막 참조 시간
+            }
+            
+            # 파일 내용 요약 저장 (텍스트 및 이미지 파일)
             if suffix.lower() in ['.txt', '.md']:
                 try:
                     with open(temp_path, 'r', encoding='utf-8') as f:
@@ -766,10 +776,19 @@ if uploaded_files and st.button("📚 문서 처리 시작", type="primary"):
                         st.session_state.file_contents[uploaded_file.name] = {
                             'type': 'text',
                             'summary': summary,
-                            'full_content': content
+                            'full_content': content,
+                            'file_id': file_info['file_id']
                         }
                 except Exception as e:
                     st.warning(f"파일 내용 읽기 실패: {str(e)}")
+            elif suffix.lower() in ['.jpg', '.jpeg', '.png', '.gif', '.bmp']:
+                # 이미지 파일 정보 저장
+                st.session_state.file_contents[uploaded_file.name] = {
+                    'type': 'image',
+                    'summary': f"이미지 파일 ({file_info['type']}, {file_info['size']} bytes)",
+                    'file_id': file_info['file_id'],
+                    'content_hash': file_info['content_hash']
+                }
             
             successful_files.append(uploaded_file.name)
             
@@ -819,7 +838,7 @@ if uploaded_files and st.button("📚 문서 처리 시작", type="primary"):
         st.markdown("### 📚 업로드된 파일 히스토리")
         with st.expander("📋 파일 목록 및 요약", expanded=True):
             for i, file_info in enumerate(st.session_state.uploaded_files):
-                col1, col2, col3 = st.columns([2, 1, 1])
+                col1, col2, col3, col4 = st.columns([2, 1, 1, 2])
                 
                 with col1:
                     file_icon = "📄" if file_info['type'] in ['.txt', '.md'] else "🖼️" if file_info['type'] in ['.jpg', '.jpeg', '.png', '.gif', '.bmp'] else "📕"
@@ -832,7 +851,12 @@ if uploaded_files and st.button("📚 문서 처리 시작", type="primary"):
                     size_kb = file_info['size'] / 1024
                     st.write(f"**크기**: {size_kb:.1f} KB")
                 
-                # 파일 내용 요약 표시 (텍스트 파일의 경우)
+                with col4:
+                    st.write(f"**ID**: `{file_info.get('file_id', 'N/A')[:20]}...`")
+                    if 'content_hash' in file_info:
+                        st.write(f"**해시**: `{file_info['content_hash']}`")
+                
+                # 파일 내용 요약 표시 (텍스트 및 이미지 파일)
                 if file_info['name'] in st.session_state.file_contents:
                     content_info = st.session_state.file_contents[file_info['name']]
                     if content_info['type'] == 'text':
@@ -843,6 +867,9 @@ if uploaded_files and st.button("📚 문서 처리 시작", type="primary"):
                             key=f"summary_{i}",
                             disabled=True
                         )
+                    elif content_info['type'] == 'image':
+                        st.info(f"🖼️ 이미지 파일 - 해시: {content_info.get('content_hash', 'N/A')}")
+                        st.info(f"📋 파일 ID: {content_info.get('file_id', 'N/A')}")
                 
                 st.markdown("---")
 
@@ -949,6 +976,23 @@ if st.session_state.get('documents_added', False):
         # 컨텍스트 정보 업데이트
         st.session_state.conversation_context['last_query'] = prompt
         
+        # 이전 대화 컨텍스트 분석
+        previous_context = ""
+        if len(st.session_state.chat_history) > 0:
+            # 최근 3개 대화에서 파일 참조 정보 수집
+            recent_messages = st.session_state.chat_history[-3:]
+            referenced_files = set()
+            for msg in recent_messages:
+                if msg.get('role') == 'assistant' and 'sources' in msg:
+                    for source in msg.get('sources', []):
+                        if hasattr(source, 'metadata'):
+                            file_name = source.metadata.get('filename', source.metadata.get('source', ''))
+                            if file_name:
+                                referenced_files.add(file_name)
+            
+            if referenced_files:
+                previous_context = f"\n이전 대화에서 참조된 파일들: {', '.join(list(referenced_files)[:3])}"
+        
         # 사용자 질문을 채팅 히스토리에 추가
         user_message = {
             'role': 'user',
@@ -957,7 +1001,8 @@ if st.session_state.get('documents_added', False):
             'context': {
                 'uploaded_files': len(st.session_state.uploaded_files),
                 'file_types': [f['type'] for f in st.session_state.uploaded_files],
-                'session_duration': time.time() - st.session_state.conversation_context['session_start']
+                'session_duration': time.time() - st.session_state.conversation_context['session_start'],
+                'previous_references': list(referenced_files) if 'referenced_files' in locals() else []
             }
         }
         st.session_state.chat_history.append(user_message)
@@ -965,16 +1010,20 @@ if st.session_state.get('documents_added', False):
         # 답변 생성
         with st.spinner("답변 생성 중..."):
             try:
-                # 컨텍스트가 포함된 질문 생성
+                # 강화된 컨텍스트가 포함된 질문 생성
                 context_prompt = f"""
                 컨텍스트 정보:
                 - 업로드된 파일 수: {len(st.session_state.uploaded_files)}
                 - 파일 타입: {', '.join([f['type'] for f in st.session_state.uploaded_files])}
                 - 이전 대화 수: {len(st.session_state.chat_history) - 1}
+                - 현재 세션 시간: {time.time() - st.session_state.conversation_context['session_start']:.1f}초
+                {previous_context}
                 
                 사용자 질문: {prompt}
                 
-                위의 컨텍스트를 고려하여 답변해주세요. 업로드된 파일들이 있다면 그 내용을 참고하여 답변하세요.
+                위의 컨텍스트를 고려하여 답변해주세요. 
+                업로드된 파일들이 있다면 그 내용을 참고하여 답변하세요.
+                이전 대화에서 참조된 파일이 있다면 그 맥락도 고려해주세요.
                 """
                 
                 # OpenAI 사용 시 타임아웃 및 재시도 로직
@@ -1018,9 +1067,41 @@ if st.session_state.get('documents_added', False):
                     'timestamp': len(st.session_state.chat_history),
                     'context_used': {
                         'files_referenced': len(result.sources),
-                        'query_understood': True
+                        'query_understood': True,
+                        'referenced_files': []
                     }
                 }
+                
+                # 참조된 파일 정보 업데이트
+                if result.sources:
+                    for source in result.sources:
+                        if hasattr(source, 'metadata'):
+                            file_name = source.metadata.get('filename', source.metadata.get('source', ''))
+                            if file_name:
+                                # 파일 참조 기록 업데이트
+                                for file_info in st.session_state.uploaded_files:
+                                    if file_info['name'] == file_name:
+                                        file_id = file_info.get('file_id', f"file_{file_info['name']}")
+                                        if file_id in st.session_state.conversation_context['file_references']:
+                                            st.session_state.conversation_context['file_references'][file_id]['reference_count'] += 1
+                                            st.session_state.conversation_context['file_references'][file_id]['last_referenced'] = time.time()
+                                        
+                                        assistant_message['context_used']['referenced_files'].append({
+                                            'name': file_name,
+                                            'type': file_info['type'],
+                                            'reference_count': st.session_state.conversation_context['file_references'].get(file_id, {}).get('reference_count', 0)
+                                        })
+                                        break
+                
+                # 대화 기억에 추가
+                st.session_state.conversation_context['conversation_memory'].append({
+                    'timestamp': time.time(),
+                    'query': prompt,
+                    'answer': result.answer,
+                    'files_referenced': len(result.sources),
+                    'context_summary': f"질문: {prompt[:50]}... | 답변: {result.answer[:100]}..."
+                })
+                
                 st.session_state.chat_history.append(assistant_message)
                 
                 # 페이지 새로고침으로 최신 대화 표시
