@@ -818,8 +818,8 @@ if st.session_state.get('documents_added', False):
     st.markdown("---")
     st.markdown("## 💬 채팅형 질문하기")
     
-                    # 채팅 히스토리 표시
-                for message in st.session_state.chat_history:
+    # 채팅 히스토리 표시
+    for message in st.session_state.chat_history:
                     if message['role'] == 'user':
                         with st.chat_message("user"):
                             st.write(message['content'])
