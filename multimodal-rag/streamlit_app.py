@@ -967,7 +967,7 @@ if st.session_state.get('documents_added', False):
                             }
                             st.session_state.chat_history.append(error_message)
                             st.rerun()
-                            return
+                            break  # while 루프 탈출
                         else:
                             # 재시도 안내
                             st.warning(f"⚠️ API 호출 실패, {retry_count}/{max_retries} 재시도 중...")
