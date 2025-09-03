@@ -432,14 +432,41 @@ with st.sidebar:
                 
                 if vision_models:
                     st.success(f"👁️ Vision 모델: {len(vision_models)}개 준비됨")
+                    
+                    # Vision 모델 자동 선택 (최신 모델 우선)
+                    recommended_vision_models = [
+                        'gpt-4o',           # 최신 통합 모델
+                        'gpt-4o-mini',      # 경량 버전
+                        'gpt-4-vision-preview',  # 구버전 (fallback)
+                    ]
+                    
+                    # 사용 가능한 모델 중에서 권장 모델 찾기
+                    selected_vision_model = None
+                    for recommended in recommended_vision_models:
+                        if recommended in vision_models:
+                            selected_vision_model = recommended
+                            break
+                    
+                    if selected_vision_model:
+                        st.success(f"🎯 권장 Vision 모델: {selected_vision_model}")
+                        # 세션에 Vision 모델 저장
+                        st.session_state.selected_vision_model = selected_vision_model
+                    else:
+                        st.warning("⚠️ 권장 Vision 모델을 찾을 수 없습니다")
+                        selected_vision_model = vision_models[0] if vision_models else "gpt-4o"
+                        st.info(f"사용할 Vision 모델: {selected_vision_model}")
+                    
                     with st.expander("📋 Vision 모델 목록", expanded=False):
                         for model in vision_models:
-                            st.info(f"👁️ {model}")
+                            if model == selected_vision_model:
+                                st.success(f"👁️ {model} (선택됨)")
+                            else:
+                                st.info(f"👁️ {model}")
                 
                 # 사용 가능한 기능 안내
                 with st.expander("📋 OpenAI 멀티모달 기능", expanded=False):
                     st.info("• 🤖 텍스트 생성: GPT-3.5/4 시리즈")
-                    st.info("• 👁️ 이미지 분석: GPT-4-vision-preview")
+                    st.info("• 👁️ 이미지 분석: GPT-4o (최신 Vision 모델)")
                     st.info("• 🔍 이미지 OCR: 텍스트 추출 가능")
                     st.info("• 📊 차트/그래프 이해: 복잡한 시각 데이터 분석")
                     st.info("• 🌍 다국어 지원: 한국어 포함 100+ 언어")
@@ -546,6 +573,22 @@ if 'rag_system' not in st.session_state and should_initialize:
                     else:
                         st.info(f"🤖 언어 모델 '{language_model}'을 사용합니다.")
             
+            # OpenAI API 키 설정 (우선순위: 검증된 키 > 환경변수)
+            openai_api_key = None
+            if llm_provider == "openai":
+                if st.session_state.get('openai_verified', False) and st.session_state.get('openai_api_key'):
+                    openai_api_key = st.session_state.openai_api_key
+                else:
+                    # 환경변수 확인
+                    env_key = os.getenv('OPENAI_API_KEY')
+                    if env_key:
+                        openai_api_key = env_key
+                        st.info("🔑 환경변수 OPENAI_API_KEY를 사용합니다")
+                    else:
+                        st.warning("⏳ OpenAI API 키 설정을 기다리는 중...")
+                        st.info("💡 위의 사이드바에서 API 키를 설정해주세요")
+                        st.stop()
+            
             elif llm_provider == "openai":
                 # OpenAI: 사용 가능한 모델 중에서 선택
                 try:
@@ -584,30 +627,22 @@ if 'rag_system' not in st.session_state and should_initialize:
                     language_model = "gpt-3.5-turbo"
                     st.warning(f"⚠️ 모델 선택 중 오류 발생: {str(e)}")
                     st.info(f"기본값 '{language_model}'을 사용합니다.")
-            
-            # OpenAI API 키 설정 (우선순위: 검증된 키 > 환경변수)
-            openai_api_key = None
-            if llm_provider == "openai":
-                if st.session_state.get('openai_verified', False) and st.session_state.get('openai_api_key'):
-                    openai_api_key = st.session_state.openai_api_key
-                else:
-                    # 환경변수 확인
-                    env_key = os.getenv('OPENAI_API_KEY')
-                    if env_key:
-                        openai_api_key = env_key
-                        st.info("🔑 환경변수 OPENAI_API_KEY를 사용합니다")
-                    else:
-                        st.warning("⏳ OpenAI API 키 설정을 기다리는 중...")
-                        st.info("💡 위의 사이드바에서 API 키를 설정해주세요")
-                        st.stop()
                 
                 # 선택된 모델을 세션에 저장
                 if 'selected_model' in locals():
                     st.session_state.selected_openai_model = selected_model
             
+            # Vision 모델 선택 (OpenAI인 경우)
+            if llm_provider == "openai":
+                # 세션에서 선택된 Vision 모델 사용, 없으면 기본값
+                vision_model = st.session_state.get('selected_vision_model', 'gpt-4o')
+                st.info(f"👁️ Vision 모델: {vision_model} 사용")
+            else:
+                vision_model = "llava"
+            
             st.session_state.rag_system = MultimodalRAG(
                 llm_model=language_model,
-                vision_model="gpt-4-vision-preview" if llm_provider == "openai" else "llava",
+                vision_model=vision_model,
                 llm_provider=llm_provider,
                 openai_api_key=openai_api_key
             )
@@ -1032,7 +1067,7 @@ else:
             st.markdown("""
             **🤖 기능:**
             • 텍스트 문서 검색
-            • 이미지 내용 분석 (GPT-4 Vision)
+            • 이미지 내용 분석 (GPT-4o Vision)
             • 멀티모달 통합 검색
             """)
 
