@@ -46,10 +46,10 @@ class StoryOrganizingChain:
     
     def organize(self, text: str) -> Dict[str, Any]:
         """스토리 구조화 실행"""
+        import json
         try:
             result = self.chain.run(text=text)
             # JSON 파싱 시도
-            import json
             organized = json.loads(result)
             return organized
         except json.JSONDecodeError:
@@ -60,6 +60,20 @@ class StoryOrganizingChain:
                 "sections": [
                     {
                         "section_title": "메인 스토리",
+                        "content": text,
+                        "key_points": []
+                    }
+                ]
+            }
+        except Exception as e:
+            print(f"❌ 구조화 처리 실패: {e}")
+            # 오류 발생시에도 기본 구조 반환
+            return {
+                "title": "사용자 스토리",
+                "summary": text[:100] + "..." if len(text) > 100 else text,
+                "sections": [
+                    {
+                        "section_title": "메인 스토리", 
                         "content": text,
                         "key_points": []
                     }

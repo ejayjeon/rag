@@ -37,13 +37,42 @@ if str(project_root) not in sys.path:
 # 프로젝트 모듈 import
 from src.services.voice_service import VoiceProcessingService
 from src.core.config import Config
+from src.chains.llm_factory import LLMFactory
 
-# 배포 디버그 정보 (배포 환경에서 경로 확인용)
-st.write("🔍 **배포 디버그 정보**")
-st.write(f"**현재 작업 디렉토리**: {Path.cwd()}")
-st.write(f"**파일 위치**: {Path(__file__)}")
-st.write(f"**선택된 프로젝트 루트**: {project_root}")
-st.write(f"**src 폴더 존재 여부**: {(project_root / 'src').exists()}")
+# 환경 변수 및 LLM 연결 상태 확인
+def check_environment():
+    """환경 변수 및 LLM 연결 상태 확인"""
+    env_status = {}
+    
+    # 환경 변수 확인
+    env_status['LLM_PROVIDER'] = os.getenv('LLM_PROVIDER', 'Not Set')
+    env_status['OPENAI_API_KEY'] = "✅ Set" if os.getenv('OPENAI_API_KEY') else "❌ Not Set"
+    env_status['OLLAMA_BASE_URL'] = os.getenv('OLLAMA_BASE_URL', 'Not Set')
+    
+    # LLM 연결 테스트
+    try:
+        provider_info = LLMFactory.get_provider_info()
+        env_status['LLM_Status'] = provider_info['status']
+        env_status['LLM_Model'] = provider_info['model']
+    except Exception as e:
+        env_status['LLM_Status'] = f"❌ Error: {str(e)}"
+        env_status['LLM_Model'] = "Unknown"
+    
+    return env_status
+
+# 배포 디버그 정보 (배포 환경에서 확인용)
+with st.expander("🔍 **배포 디버그 정보**", expanded=False):
+    st.write(f"**현재 작업 디렉토리**: {Path.cwd()}")
+    st.write(f"**파일 위치**: {Path(__file__)}")
+    st.write(f"**선택된 프로젝트 루트**: {project_root}")
+    st.write(f"**src 폴더 존재 여부**: {(project_root / 'src').exists()}")
+    
+    # 환경 변수 상태 확인
+    st.write("### 🔧 환경 변수 상태")
+    env_status = check_environment()
+    for key, value in env_status.items():
+        st.write(f"**{key}**: {value}")
+
 st.write("---")
 
 # Streamlit 페이지 설정

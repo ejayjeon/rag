@@ -14,35 +14,46 @@ class LLMFactory:
     def create_llm(provider: str = None, model: str = None, **kwargs) -> Any:
         """LLM 제공자에 따라 적절한 LLM 인스턴스 생성"""
         
-        # provider가 명시되지 않으면 Config에서 가져오기
-        if not provider:
-            llm_config = Config.get_llm_config()
-            provider = llm_config["provider"]
-            model = model or llm_config["model"]
-        
-        # OpenAI 사용
-        if provider.lower() == "openai":
-            openai_kwargs = {
-                "model": model or Config.OPENAI_MODEL,
-                "temperature": kwargs.get("temperature", 0.5),
-                "api_key": Config.OPENAI_API_KEY,
-            }
+        try:
+            # provider가 명시되지 않으면 Config에서 가져오기
+            if not provider:
+                llm_config = Config.get_llm_config()
+                provider = llm_config["provider"]
+                model = model or llm_config["model"]
             
-            # 커스텀 base_url이 있다면 추가
-            if Config.OPENAI_BASE_URL:
-                openai_kwargs["base_url"] = Config.OPENAI_BASE_URL
+            # OpenAI 사용
+            if provider.lower() == "openai":
+                if not Config.OPENAI_API_KEY:
+                    raise ValueError("OpenAI API 키가 설정되지 않았습니다. OPENAI_API_KEY 환경 변수를 확인하세요.")
                 
-            return ChatOpenAI(**openai_kwargs)
-        
-        # Ollama 사용 (기본값)
-        else:
-            ollama_kwargs = {
-                "model": model or Config.OLLAMA_MODEL,
-                "temperature": kwargs.get("temperature", 0.5),
-                "base_url": Config.OLLAMA_BASE_URL,
-            }
+                openai_kwargs = {
+                    "model": model or Config.OPENAI_MODEL,
+                    "temperature": kwargs.get("temperature", 0.5),
+                    "api_key": Config.OPENAI_API_KEY,
+                    "timeout": kwargs.get("timeout", 30),
+                    "max_retries": kwargs.get("max_retries", 3),
+                }
+                
+                # 커스텀 base_url이 있다면 추가
+                if Config.OPENAI_BASE_URL:
+                    openai_kwargs["base_url"] = Config.OPENAI_BASE_URL
+                    
+                return ChatOpenAI(**openai_kwargs)
             
-            return ChatOllama(**ollama_kwargs)
+            # Ollama 사용 (기본값)
+            else:
+                ollama_kwargs = {
+                    "model": model or Config.OLLAMA_MODEL,
+                    "temperature": kwargs.get("temperature", 0.5),
+                    "base_url": Config.OLLAMA_BASE_URL,
+                    "timeout": kwargs.get("timeout", 30),
+                }
+                
+                return ChatOllama(**ollama_kwargs)
+                
+        except Exception as e:
+            print(f"❌ LLM 인스턴스 생성 실패: {e}")
+            raise
     
     @staticmethod
     def get_provider_info() -> dict:
