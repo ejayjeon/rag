@@ -16,10 +16,11 @@ except ImportError:
 class STTProcessor:
     """Whisper를 사용한 STT 처리"""
 
-    def __init__(self, model_name: str = "base", language: str = "ko"):
+    def __init__(self, model_name: str = "base", language: str = "ko", force_librosa: bool = False):
         self.model_name = model_name
         self.language = language
         self.model = None
+        self.force_librosa = force_librosa  # Streamlit Cloud용 강제 librosa 사용
         self._load_model()
 
     def _load_model(self):
@@ -50,6 +51,11 @@ class STTProcessor:
         """음성 파일을 텍스트로 변환"""
         start_time = time.time()
         
+        # Streamlit Cloud에서 강제 librosa 사용
+        if self.force_librosa and LIBROSA_AVAILABLE:
+            print("🔄 강제 librosa 모드 사용")
+            return self._transcribe_with_librosa(audio_path, language, start_time)
+        
         try:
             # 방법 1: 직접 Whisper 사용 (ffmpeg 필요)
             result = self.model.transcribe(
@@ -77,15 +83,17 @@ class STTProcessor:
             print(f"❌ 직접 STT 처리 실패: {e}")
             print(f"🔍 LIBROSA_AVAILABLE: {LIBROSA_AVAILABLE}")
             print(f"🔍 ffmpeg in error: {'ffmpeg' in str(e).lower()}")
+            print(f"🔍 Error type: {type(e).__name__}")
             
-            # ffmpeg 오류인 경우 librosa fallback 시도
-            if "ffmpeg" in str(e).lower() and LIBROSA_AVAILABLE:
+            # 모든 오디오 관련 오류에 대해 librosa fallback 시도
+            if LIBROSA_AVAILABLE and ("ffmpeg" in str(e).lower() or "audio" in str(e).lower() or "No such file" in str(e)):
                 print("🔄 librosa를 사용한 fallback 시도...")
                 return self._transcribe_with_librosa(audio_path, language, start_time)
             else:
-                print("🔧 ffmpeg 설치 확인 필요:")
-                print("   - packages.txt에 ffmpeg 추가")
-                print("   - Streamlit Cloud 앱 재배포")
+                print("🔧 문제 해결 방법:")
+                print("   1. packages.txt에 ffmpeg 추가")
+                print("   2. Streamlit Cloud 앱 재배포")
+                print(f"   3. librosa 사용 가능: {LIBROSA_AVAILABLE}")
                 raise
     
     def _transcribe_with_librosa(self, audio_path: str, language: str, start_time: float) -> Tuple[str, float]:

@@ -17,8 +17,11 @@ class VoiceProcessingWorkflow:
     def __init__(self, llm_provider: str = None):
         self.llm_provider = llm_provider
         
-        # STT는 항상 Whisper 사용
-        self.stt_processor = STTProcessor()
+        # STT는 항상 Whisper 사용 (Streamlit Cloud에서는 강제 librosa)
+        from .config import Config
+        force_librosa = Config.is_streamlit_cloud()
+        print(f"🔍 Streamlit Cloud 감지: {force_librosa}")
+        self.stt_processor = STTProcessor(force_librosa=force_librosa)
         
         # LLM 체인들은 provider에 따라 다른 LLM 사용
         self.cleaning_chain = TextCleaningChain(provider=llm_provider)

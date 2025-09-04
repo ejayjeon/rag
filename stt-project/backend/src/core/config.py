@@ -83,6 +83,18 @@ class Config:
         return bool(cls.OPENAI_API_KEY)
     
     @classmethod
+    def is_streamlit_cloud(cls) -> bool:
+        """Streamlit Cloud 환경인지 확인"""
+        # Streamlit Cloud 특징: /app/ 경로 사용, 특정 환경 변수
+        import sys
+        return (
+            "/app/" in str(Path.cwd()) or 
+            "/mount/src/" in str(Path.cwd()) or
+            "STREAMLIT_CLOUD" in os.environ or
+            "streamlit" in sys.modules
+        )
+    
+    @classmethod
     def ensure_directories(cls):
         """필요한 디렉토리 생성"""
         cls.MODELS_DIR.mkdir(exist_ok=True)
