@@ -9,14 +9,26 @@ import json
 from datetime import datetime
 
 # 프로젝트 루트를 Python path에 추가 (배포 환경 대응)
-project_root = Path(__file__).parent.parent.parent
+# 배포 환경에서는 /mount/src/rag/stt-project/backend가 실제 경로
+current_dir = Path.cwd()
+project_root = None
 
-# 배포 환경에서의 경로 처리
-if not project_root.exists():
-    # Streamlit Cloud 배포 환경 대응
-    project_root = Path.cwd()
-    if (project_root / "stt-project" / "backend").exists():
-        project_root = project_root / "stt-project" / "backend"
+# 가능한 프로젝트 루트 경로들을 순서대로 확인
+possible_paths = [
+    Path(__file__).parent.parent.parent,  # 로컬 개발 환경
+    current_dir / "stt-project" / "backend",  # Streamlit Cloud 배포 환경
+    current_dir,  # 현재 디렉토리가 프로젝트 루트인 경우
+    Path("/mount/src/rag/stt-project/backend"),  # Streamlit Cloud 절대 경로
+]
+
+for path in possible_paths:
+    if path.exists() and (path / "src").exists():
+        project_root = path
+        break
+
+# 프로젝트 루트를 찾지 못한 경우 현재 디렉토리 사용
+if project_root is None:
+    project_root = current_dir
 
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
