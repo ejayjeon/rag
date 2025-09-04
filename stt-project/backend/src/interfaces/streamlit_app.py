@@ -14,12 +14,12 @@ if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 # 프로젝트 모듈 import
-try:
-    from src.services.voice_service import VoiceProcessingService
-    from src.core.config import Config
-except ImportError:
-    st.error("❌ 프로젝트 모듈을 찾을 수 없습니다. 프로젝트 루트에서 실행해주세요.")
-    st.stop()
+# try:
+from src.services.voice_service import VoiceProcessingService
+from src.core.config import Config
+# except ImportError:
+#     st.error("❌ 프로젝트 모듈을 찾을 수 없습니다. 프로젝트 루트에서 실행해주세요.")
+#     st.stop()
 
 # Streamlit 페이지 설정
 st.set_page_config(
