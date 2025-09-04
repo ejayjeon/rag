@@ -44,16 +44,8 @@ if str(project_root) not in sys.path:
     print(f"📁 Python path에 추가: {project_root}")
 
 # 프로젝트 모듈 import
-try:
-    from src.services.voice_service import VoiceProcessingService
-    from src.core.config import Config
-    print("✅ 프로젝트 모듈 import 성공")
-except ImportError as e:
-    st.error(f"❌ 프로젝트 모듈을 찾을 수 없습니다: {str(e)}")
-    st.error(f"현재 작업 디렉토리: {os.getcwd()}")
-    st.error(f"Python path: {sys.path[:3]}...")  # 처음 3개만 표시
-    st.error(f"프로젝트 루트: {project_root}")
-    st.stop()
+from src.services.voice_service import VoiceProcessingService
+from src.core.config import Config
 
 # Streamlit 페이지 설정
 st.set_page_config(
