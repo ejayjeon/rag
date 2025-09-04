@@ -1,0 +1,13 @@
+[build]
+# requirements.txt 사용 (배포 안정성)
+requirements = "stt-project/backend/requirements.txt"
+
+[server]
+# 배포 환경 설정
+port = 8501
+address = "0.0.0.0"
+headless = true
+
+[browser]
+# 브라우저 자동 열기 비활성화 (배포 환경)
+gatherUsageStats = false

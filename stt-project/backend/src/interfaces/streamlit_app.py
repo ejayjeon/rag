@@ -8,18 +8,29 @@ from pathlib import Path
 import json
 from datetime import datetime
 
-# 프로젝트 루트를 Python path에 추가
+# 프로젝트 루트를 Python path에 추가 (배포 환경 대응)
 project_root = Path(__file__).parent.parent.parent
+
+# 배포 환경에서의 경로 처리
+if not project_root.exists():
+    # Streamlit Cloud 배포 환경 대응
+    project_root = Path.cwd()
+    if (project_root / "stt-project" / "backend").exists():
+        project_root = project_root / "stt-project" / "backend"
+
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 # 프로젝트 모듈 import
-# try:
-from src.services.voice_service import VoiceProcessingService
-from src.core.config import Config
-# except ImportError:
-#     st.error("❌ 프로젝트 모듈을 찾을 수 없습니다. 프로젝트 루트에서 실행해주세요.")
-#     st.stop()
+try:
+    from src.services.voice_service import VoiceProcessingService
+    from src.core.config import Config
+except ImportError as e:
+    st.error(f"❌ 프로젝트 모듈을 찾을 수 없습니다: {str(e)}")
+    st.error(f"현재 작업 디렉토리: {os.getcwd()}")
+    st.error(f"Python path: {sys.path[:3]}...")  # 처음 3개만 표시
+    st.error(f"프로젝트 루트: {project_root}")
+    st.stop()
 
 # Streamlit 페이지 설정
 st.set_page_config(
