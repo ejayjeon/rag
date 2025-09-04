@@ -44,15 +44,16 @@ if str(project_root) not in sys.path:
     print(f"📁 Python path에 추가: {project_root}")
 
 # 프로젝트 모듈 import
-# try:
+try:
     from src.services.voice_service import VoiceProcessingService
     from src.core.config import Config
-# except ImportError as e:
-#     st.error(f"❌ 프로젝트 모듈을 찾을 수 없습니다: {str(e)}")
-#     st.error(f"현재 작업 디렉토리: {os.getcwd()}")
-#     st.error(f"Python path: {sys.path[:3]}...")  # 처음 3개만 표시
-#     st.error(f"프로젝트 루트: {project_root}")
-#     st.stop()
+    print("✅ 프로젝트 모듈 import 성공")
+except ImportError as e:
+    st.error(f"❌ 프로젝트 모듈을 찾을 수 없습니다: {str(e)}")
+    st.error(f"현재 작업 디렉토리: {os.getcwd()}")
+    st.error(f"Python path: {sys.path[:3]}...")  # 처음 3개만 표시
+    st.error(f"프로젝트 루트: {project_root}")
+    st.stop()
 
 # Streamlit 페이지 설정
 st.set_page_config(
@@ -82,12 +83,20 @@ def render_sidebar():
         # 설정 정보
         st.markdown("---")
         st.markdown("## ⚙️ 처리 설정")
-        st.info(f"""
-        **STT 모델**: {Config.WHISPER_MODEL}
-        **언어**: {Config.WHISPER_LANGUAGE}
-        **최대 파일 크기**: {Config.MAX_AUDIO_SIZE_MB}MB
-        **LLM 모델**: {Config.LLM_MODEL}
-        """)
+        try:
+            st.info(f"""
+            **STT 모델**: {Config.WHISPER_MODEL}
+            **언어**: {Config.WHISPER_LANGUAGE}
+            **최대 파일 크기**: {Config.MAX_AUDIO_SIZE_MB}MB
+            **LLM 모델**: {Config.LLM_MODEL}
+            """)
+        except NameError:
+            st.info("""
+            **STT 모델**: base
+            **언어**: ko
+            **최대 파일 크기**: 50MB
+            **LLM 모델**: llama2
+            """)
         
         st.markdown("---")
         st.markdown("## 📋 처리 단계")
