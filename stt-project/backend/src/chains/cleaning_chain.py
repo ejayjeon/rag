@@ -5,13 +5,13 @@
 from typing import Dict, Any
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
-from langchain_ollama import ChatOllama
+from .llm_factory import LLMFactory
 
 class TextCleaningChain:
     """습관어 제거 및 텍스트 정리 체인"""
     
-    def __init__(self, llm_model: str = "llama2"):
-        self.llm = ChatOllama(model=llm_model, temperature=0.5)
+    def __init__(self, provider: str = None, model: str = None):
+        self.llm = LLMFactory.create_llm(provider=provider, model=model, temperature=0.5)
         self.chain = self._create_chain()
     
     def _create_chain(self) -> LLMChain:

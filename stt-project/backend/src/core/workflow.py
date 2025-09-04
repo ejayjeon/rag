@@ -14,11 +14,17 @@ import uuid
 class VoiceProcessingWorkflow:
     """음성 처리 워크플로우"""
     
-    def __init__(self):
+    def __init__(self, llm_provider: str = None):
+        self.llm_provider = llm_provider
+        
+        # STT는 항상 Whisper 사용
         self.stt_processor = STTProcessor()
-        self.cleaning_chain = TextCleaningChain()
-        self.organizing_chain = StoryOrganizingChain()
-        self.tagging_chain = HashtagExtractionChain()
+        
+        # LLM 체인들은 provider에 따라 다른 LLM 사용
+        self.cleaning_chain = TextCleaningChain(provider=llm_provider)
+        self.organizing_chain = StoryOrganizingChain(provider=llm_provider)
+        self.tagging_chain = HashtagExtractionChain(provider=llm_provider)
+        
         self.workflow = self._create_workflow()
     
     def _create_workflow(self) -> StateGraph:
@@ -104,20 +110,32 @@ class VoiceProcessingWorkflow:
         
         def quality_check_node(state: VoiceProcessingState) -> str:
             """품질 확인 및 분기 결정"""
+            # 디버깅을 위한 로그
+            processing_steps = state.get("processing_steps", [])
+            print(f"Quality check - Processing steps: {processing_steps}")
+            
             # 오류 메시지가 있으면 실패로 처리
             if state.get("error_messages"):
+                print("Quality check result: failed (error messages exist)")
                 return "failed"
             
-            # STT 신뢰도 확인
-            stt_confidence = state.get("stt_confidence", 0.0)
-            if stt_confidence < 0.3:
-                return "retry_stt"
+            # 재시도 횟수 확인 (무한 루프 방지)
+            stt_attempts = len([step for step in processing_steps if step == "stt_complete"])
+            print(f"STT attempts so far: {stt_attempts}")
+            
+            # STT 재시도는 완전히 비활성화 (무한 루프 방지)
+            # stt_confidence = state.get("stt_confidence", 0.0)
+            # if stt_confidence < 0.3 and stt_attempts < 1:
+            #     print("Quality check result: retry_stt")
+            #     return "retry_stt"
             
             # 텍스트 길이 확인
             cleaned_text = state.get("cleaned_text", "")
             if len(cleaned_text.strip()) < 10:
+                print("Quality check result: insufficient_content")
                 return "insufficient_content"
             
+            print("Quality check result: success")
             return "success"
         
         # 워크플로우 구성
@@ -135,18 +153,19 @@ class VoiceProcessingWorkflow:
         workflow.add_edge("cleaner", "organizer")
         workflow.add_edge("organizer", "tagger")
         
-        # 조건부 엣지 (품질 검사)
+        # 조건부 엣지 (품질 검사) - retry_stt 제거로 무한 루프 완전 방지
         workflow.add_conditional_edges(
             "tagger",
             quality_check_node,
             {
                 "success": END,
-                "retry_stt": "stt",
+                # "retry_stt": "stt",  # 무한 루프 방지를 위해 제거
                 "insufficient_content": END,
                 "failed": END
             }
         )
         
+        # 워크플로우 컴파일
         return workflow.compile()
     
     def process_voice(self, audio_file_path: str) -> ProcessingResult:
@@ -172,8 +191,10 @@ class VoiceProcessingWorkflow:
         )
         
         try:
-            # 워크플로우 실행
-            result_state = self.workflow.invoke(initial_state)
+            # LangGraph 워크플로우 실행 (올바른 config 설정)
+            print("워크플로우 실행 시작 (recursion_limit=100)...")
+            result_state = self.workflow.invoke(initial_state, {"recursion_limit": 100})
+            print(f"워크플로우 실행 완료. 처리 단계: {result_state.get('processing_steps', [])}")
             
             # 결과 반환
             return ProcessingResult(
@@ -193,8 +214,46 @@ class VoiceProcessingWorkflow:
             )
             
         except Exception as e:
-            return ProcessingResult(
-                success=False,
-                session_id=session_id,
-                error_message=f"워크플로우 실행 오류: {str(e)}"
-            )
+            print(f"워크플로우 실행 오류: {e}")
+            # Fallback: 직접 단계별 실행
+            print("=== Fallback: 직접 단계별 실행 ===")
+            try:
+                print("STT 단계...")
+                stt_text, confidence, processing_time = self.stt_processor.transcribe(audio_file_path)
+                
+                print("Cleaning 단계...")
+                cleaned_result = self.cleaning_chain.clean(stt_text)
+                cleaned_text = cleaned_result["cleaned_text"]
+                
+                print("Organizing 단계...")
+                organized_story = self.organizing_chain.organize(cleaned_text)
+                
+                print("Tagging 단계...")
+                story_content = cleaned_text
+                if organized_story.get("sections"):
+                    story_content = " ".join([s["content"] for s in organized_story["sections"]])
+                tags = self.tagging_chain.extract_tags(story_content)
+                
+                return ProcessingResult(
+                    success=True,
+                    session_id=session_id,
+                    original_text=stt_text,
+                    cleaned_text=cleaned_text,
+                    organized_story=organized_story,
+                    tags=tags,
+                    processing_info={
+                        "steps": ["stt_complete", "cleaning_complete", "organizing_complete", "tagging_complete"],
+                        "stt_confidence": confidence,
+                        "removed_fillers": cleaned_result.get("removed_fillers", []),
+                        "processing_time": {"stt": processing_time}
+                    },
+                    error_message=""
+                )
+                
+            except Exception as fallback_error:
+                print(f"Fallback도 실패: {fallback_error}")
+                return ProcessingResult(
+                    success=False,
+                    session_id=session_id,
+                    error_message=f"워크플로우 실행 오류: {str(e)}, Fallback 오류: {str(fallback_error)}"
+                )

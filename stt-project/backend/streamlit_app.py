@@ -59,17 +59,60 @@ def render_sidebar():
     with st.sidebar:
         st.markdown("## 🔧 시스템 정보")
         
-        # Ollama 연결 상태 확인
-        try:
-            import requests
-            response = requests.get("http://localhost:11434", timeout=5)
-            if response.status_code == 200:
-                st.success("🦙 Ollama 연결됨")
+        # LLM 제공자 선택
+        st.markdown("## 🤖 LLM 제공자 설정")
+        
+        # 현재 설정 확인
+        current_provider = Config.get_current_llm_provider().value
+        llm_config = Config.get_llm_config()
+        
+        # 제공자 선택
+        provider_options = ["ollama", "openai"]
+        provider_labels = {"ollama": "🦙 Ollama (로컬)", "openai": "🤖 OpenAI API"}
+        
+        selected_provider = st.selectbox(
+            "LLM 제공자 선택",
+            options=provider_options,
+            index=provider_options.index(current_provider),
+            format_func=lambda x: provider_labels[x]
+        )
+        
+        # 환경변수로 제공자 설정 안내
+        if selected_provider != current_provider:
+            st.info(f"""
+            💡 **제공자 변경**
+            
+            환경변수 설정:
+            ```
+            LLM_PROVIDER={selected_provider}
+            ```
+            또는 배포 환경에서 환경변수를 설정하세요.
+            """)
+        
+        # 제공자별 상태 표시
+        if selected_provider == "ollama":
+            try:
+                import requests
+                response = requests.get(Config.OLLAMA_BASE_URL, timeout=5)
+                if response.status_code == 200:
+                    st.success(f"🦙 Ollama 연결됨 ({Config.OLLAMA_MODEL})")
+                else:
+                    st.error("❌ Ollama 연결 실패")
+            except:
+                st.error("❌ Ollama 서버 없음")
+                st.code("ollama serve")
+        
+        elif selected_provider == "openai":
+            if Config.is_openai_configured():
+                st.success(f"🤖 OpenAI API 설정됨 ({Config.OPENAI_MODEL})")
             else:
-                st.error("❌ Ollama 연결 실패")
-        except:
-            st.error("❌ Ollama 서버 없음")
-            st.code("ollama serve")
+                st.error("❌ OpenAI API 키 없음")
+                st.info("""
+                환경변수 설정 필요:
+                ```
+                OPENAI_API_KEY=your_api_key_here
+                ```
+                """)
         
         # 설정 정보
         st.markdown("---")
@@ -79,13 +122,15 @@ def render_sidebar():
             **STT 모델**: {Config.WHISPER_MODEL}
             **언어**: {Config.WHISPER_LANGUAGE}
             **최대 파일 크기**: {Config.MAX_AUDIO_SIZE_MB}MB
-            **LLM 모델**: {Config.LLM_MODEL}
+            **LLM 제공자**: {llm_config['provider']}
+            **LLM 모델**: {llm_config['model']}
             """)
         except NameError:
             st.info("""
             **STT 모델**: base
             **언어**: ko
             **최대 파일 크기**: 50MB
+            **LLM 제공자**: ollama
             **LLM 모델**: llama2
             """)
         
@@ -106,16 +151,18 @@ def main():
     # 사이드바 렌더링
     render_sidebar()
     
-    # 서비스 초기화 (캐시된 리소스)
+    # 서비스 초기화 (현재 선택된 provider 사용)
     @st.cache_resource
-    def get_voice_service():
+    def get_voice_service(provider: str):
         try:
-            return VoiceProcessingService()
+            return VoiceProcessingService(llm_provider=provider)
         except Exception as e:
             st.error(f"❌ 서비스 초기화 실패: {str(e)}")
             return None
     
-    voice_service = get_voice_service()
+    # 현재 설정된 provider로 서비스 초기화
+    current_provider = Config.get_current_llm_provider().value
+    voice_service = get_voice_service(current_provider)
     if voice_service is None:
         st.stop()
     
@@ -293,7 +340,7 @@ def main():
                 if result.tags:
                     # 해시태그를 예쁘게 표시
                     tag_html = " ".join([
-                        f'<span style="background-color: #e1f5fe; padding: 4px 8px; border-radius: 12px; margin: 2px; display: inline-block;">{tag}</span>'
+                        f'<span style="background-color: #e1f5fe; color: #000000; padding: 4px 8px; border-radius: 12px; margin: 2px; display: inline-block; font-weight: 500;">{tag}</span>'
                         for tag in result.tags
                     ])
                     st.markdown(tag_html, unsafe_allow_html=True)

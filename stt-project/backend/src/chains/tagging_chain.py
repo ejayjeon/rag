@@ -4,15 +4,15 @@
 
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
-from langchain_ollama import ChatOllama
 from typing import List
+from .llm_factory import LLMFactory
 
 
 class HashtagExtractionChain:
     """해시태그 추출 체인"""
     
-    def __init__(self, llm_model: str = "llama2"):
-        self.llm = ChatOllama(model=llm_model, temperature=0.3)
+    def __init__(self, provider: str = None, model: str = None):
+        self.llm = LLMFactory.create_llm(provider=provider, model=model, temperature=0.3)
         self.chain = self._create_chain()
     
     def _create_chain(self) -> LLMChain:
