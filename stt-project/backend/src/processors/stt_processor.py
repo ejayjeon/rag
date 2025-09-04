@@ -75,6 +75,8 @@ class STTProcessor:
             
         except Exception as e:
             print(f"❌ 직접 STT 처리 실패: {e}")
+            print(f"🔍 LIBROSA_AVAILABLE: {LIBROSA_AVAILABLE}")
+            print(f"🔍 ffmpeg in error: {'ffmpeg' in str(e).lower()}")
             
             # ffmpeg 오류인 경우 librosa fallback 시도
             if "ffmpeg" in str(e).lower() and LIBROSA_AVAILABLE:

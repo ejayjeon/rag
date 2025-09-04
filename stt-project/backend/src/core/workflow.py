@@ -49,9 +49,17 @@ class VoiceProcessingWorkflow:
                     }
                 }
             except Exception as e:
+                # STT 실패해도 더미 텍스트로 나머지 체인 테스트 가능하도록
+                print(f"⚠️ STT 실패, 더미 텍스트 사용: {e}")
                 return {
+                    "original_text": "STT 처리 실패로 인한 더미 텍스트입니다. 음성 인식이 정상적으로 작동하지 않았습니다.",
+                    "stt_confidence": 0.0,
                     "error_messages": state["error_messages"] + [f"STT 오류: {str(e)}"],
-                    "processing_steps": state["processing_steps"] + ["stt_failed"]
+                    "processing_steps": state["processing_steps"] + ["stt_failed"],
+                    "processing_time": {
+                        **state.get("processing_time", {}),
+                        "stt": time.time() - start_time
+                    }
                 }
         
         def cleaning_node(state: VoiceProcessingState) -> dict:
