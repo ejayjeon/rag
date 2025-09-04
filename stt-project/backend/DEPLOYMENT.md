@@ -26,7 +26,16 @@ SESSION_TIMEOUT_MINUTES = "30"
 
 ### 1. STT 오류: ffmpeg 의존성
 **오류**: `[Errno 2] No such file or directory: 'ffmpeg'`
-**해결**: `packages.txt` 파일에 `ffmpeg` 추가됨
+
+**다중 해결 방안**:
+1. **시스템 패키지**: `packages.txt`에 `ffmpeg` 추가 (Streamlit Cloud 표준)
+2. **Python 패키지**: `pyproject.toml`에 `ffmpeg-python`, `librosa`, `soundfile` 추가
+3. **자동 fallback**: ffmpeg 실패 시 librosa 자동 사용
+
+**현재 구현된 fallback 순서**:
+1. Whisper + ffmpeg (가장 빠름)
+2. Whisper + librosa (ffmpeg 없어도 동작)
+3. 실패 시 상세 오류 메시지
 
 ### 2. LLM 연결 오류: 네트워크 문제
 **오류**: `[Errno 99] Cannot assign requested address`

@@ -6,6 +6,12 @@ import whisper
 import torch
 from typing import Dict, Tuple
 import time
+import numpy as np
+try:
+    import librosa
+    LIBROSA_AVAILABLE = True
+except ImportError:
+    LIBROSA_AVAILABLE = False
 
 class STTProcessor:
     """Whisper를 사용한 STT 처리"""
@@ -45,11 +51,14 @@ class STTProcessor:
         start_time = time.time()
         
         try:
+            # 방법 1: 직접 Whisper 사용 (ffmpeg 필요)
             result = self.model.transcribe(
                 audio_path,
                 language=language,
                 fp16=False,
-                verbose=False
+                verbose=False,
+                without_timestamps=False,
+                decode_options={"beam_size": 5, "best_of": 5}
             )
             
             text = result["text"].strip()
@@ -62,9 +71,48 @@ class STTProcessor:
                 avg_confidence = 0.8  # 기본값
             
             processing_time = time.time() - start_time
-            
             return text, avg_confidence, processing_time
             
         except Exception as e:
-            print(f"❌ STT 처리 실패: {e}")
-            raise
+            print(f"❌ 직접 STT 처리 실패: {e}")
+            
+            # ffmpeg 오류인 경우 librosa fallback 시도
+            if "ffmpeg" in str(e).lower() and LIBROSA_AVAILABLE:
+                print("🔄 librosa를 사용한 fallback 시도...")
+                return self._transcribe_with_librosa(audio_path, language, start_time)
+            else:
+                print("🔧 ffmpeg 설치 확인 필요:")
+                print("   - packages.txt에 ffmpeg 추가")
+                print("   - Streamlit Cloud 앱 재배포")
+                raise
+    
+    def _transcribe_with_librosa(self, audio_path: str, language: str, start_time: float) -> Tuple[str, float]:
+        """librosa를 사용한 fallback STT 처리"""
+        try:
+            # librosa로 오디오 로드 (ffmpeg 없이 가능)
+            audio, sr = librosa.load(audio_path, sr=16000)
+            
+            # Whisper에 numpy 배열로 직접 전달
+            result = self.model.transcribe(
+                audio,
+                language=language,
+                fp16=False,
+                verbose=False
+            )
+            
+            text = result["text"].strip()
+            
+            # 신뢰도 계산
+            if "segments" in result:
+                confidences = [seg.get("confidence", 0.0) for seg in result["segments"]]
+                avg_confidence = sum(confidences) / len(confidences) if confidences else 0.0
+            else:
+                avg_confidence = 0.7  # librosa fallback이므로 약간 낮게
+            
+            processing_time = time.time() - start_time
+            print("✅ librosa fallback 성공!")
+            return text, avg_confidence, processing_time
+            
+        except Exception as fallback_error:
+            print(f"❌ librosa fallback도 실패: {fallback_error}")
+            raise Exception(f"STT 처리 완전 실패 - 직접: ffmpeg 없음, librosa: {str(fallback_error)}")
