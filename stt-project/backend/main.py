@@ -1,73 +1,140 @@
 """
-Streamlit 앱 진입점
-배포 환경에서 올바른 경로 설정을 위한 메인 파일
+FastAPI 서버 진입점
+Flutter 앱과 연동을 위한 API 서버
 """
 
 import sys
-import os
 from pathlib import Path
+from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+import uvicorn
 
-# 프로젝트 루트를 Python path에 추가 (배포 환경 대응)
-current_dir = Path.cwd()
-project_root = None
-
-# 가능한 프로젝트 루트 경로들을 순서대로 확인
-possible_paths = [
-    current_dir / "stt-project" / "backend",  # Streamlit Cloud 배포 환경 (우선순위 1)
-    Path("/mount/src/rag/stt-project/backend"),  # Streamlit Cloud 절대 경로 (우선순위 2)
-    Path(__file__).parent,  # 로컬 개발 환경 (우선순위 3)
-    current_dir,  # 현재 디렉토리가 프로젝트 루트인 경우 (우선순위 4)
-]
-
-# 디버깅을 위한 경로 확인
-print(f"🔍 [main.py] 경로 감지 중...")
-print(f"현재 작업 디렉토리: {current_dir}")
-print(f"파일 위치: {Path(__file__)}")
-
-for i, path in enumerate(possible_paths):
-    print(f"경로 {i+1}: {path} - 존재: {path.exists()}")
-    if path.exists() and (path / "src").exists():
-        print(f"✅ 유효한 프로젝트 루트 발견: {path}")
-        project_root = path
-        break
-
-# 프로젝트 루트를 찾지 못한 경우 현재 디렉토리 사용
-if project_root is None:
-    print(f"⚠️ 프로젝트 루트를 찾지 못함. 현재 디렉토리 사용: {current_dir}")
-    project_root = current_dir
-
-print(f"🎯 최종 프로젝트 루트: {project_root}")
-
+# 프로젝트 루트를 Python path에 추가
+project_root = Path(__file__).parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
-    print(f"📁 Python path에 추가: {project_root}")
 
-# Streamlit 앱 import 및 실행
-if __name__ == "__main__":
-    # Streamlit 앱 파일 경로 확인
-    streamlit_app_path = project_root / "src" / "interfaces" / "streamlit_app.py"
-    print(f"🎯 Streamlit 앱 경로: {streamlit_app_path}")
-    print(f"📁 앱 파일 존재 여부: {streamlit_app_path.exists()}")
-    
-    # Streamlit 앱 직접 import
+# 프로젝트 모듈 import
+from src.services.voice_service import VoiceProcessingService
+from src.core.config import Config
+
+# FastAPI 앱 초기화
+app = FastAPI(
+    title="🎙️ 음성 처리 API",
+    description="음성을 텍스트로 변환하고 스토리를 정리하는 API 서버",
+    version="0.1.0"
+)
+
+# CORS 설정 (Flutter 앱 연동을 위해)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 개발용, 운영 시 특정 도메인으로 제한
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# 음성 처리 서비스 초기화
+voice_service = None
+
+@app.on_event("startup")
+async def startup_event():
+    """서버 시작 시 서비스 초기화"""
+    global voice_service
     try:
-        from src.interfaces.streamlit_app import main
-        print("✅ Streamlit 앱 모듈 import 성공")
-        main()
-    except ImportError as e:
-        print(f"❌ Import error: {e}")
-        print(f"Current working directory: {os.getcwd()}")
-        print(f"Python path: {sys.path[:3]}...")
-        print(f"Project root: {project_root}")
+        voice_service = VoiceProcessingService()
+        print("✅ VoiceProcessingService 초기화 완료")
+    except Exception as e:
+        print(f"❌ 서비스 초기화 실패: {e}")
+
+@app.get("/")
+async def root():
+    """API 루트 엔드포인트"""
+    return {
+        "message": "🎙️ 음성 처리 API 서버",
+        "version": "0.1.0",
+        "status": "running",
+        "endpoints": {
+            "process_audio": "/api/v1/process-audio",
+            "health": "/health",
+            "docs": "/docs"
+        }
+    }
+
+@app.get("/health")
+async def health_check():
+    """헬스 체크 엔드포인트"""
+    return {
+        "status": "healthy",
+        "service": "voice_service" if voice_service else "not_initialized",
+        "config": {
+            "whisper_model": Config.WHISPER_MODEL,
+            "language": Config.WHISPER_LANGUAGE,
+            "max_file_size_mb": Config.MAX_AUDIO_SIZE_MB
+        }
+    }
+
+@app.post("/api/v1/process-audio")
+async def process_audio(file: UploadFile = File(...)):
+    """
+    음성 파일을 처리하여 텍스트로 변환하고 스토리를 정리
+    Flutter 앱에서 호출할 메인 엔드포인트
+    """
+    if not voice_service:
+        raise HTTPException(status_code=500, detail="음성 처리 서비스가 초기화되지 않았습니다")
+    
+    # 파일 타입 검증
+    allowed_types = ['audio/wav', 'audio/mpeg', 'audio/mp4', 'audio/m4a', 'audio/flac', 'audio/ogg']
+    if file.content_type not in allowed_types:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"지원하지 않는 파일 형식입니다. 지원 형식: {allowed_types}"
+        )
+    
+    try:
+        # 음성 파일 처리
+        result = voice_service.process_uploaded_audio(file.file, file.filename)
         
-        # Fallback: streamlit CLI 사용
-        print("🔄 Streamlit CLI로 fallback 실행")
-        import streamlit.web.cli as stcli
-        sys.argv = [
-            "streamlit", 
-            "run", 
-            str(streamlit_app_path),
-            "--server.port=8501",
-            "--server.address=0.0.0.0"
-        ]
-        sys.exit(stcli.main())
+        if result.success:
+            return {
+                "success": True,
+                "session_id": result.session_id,
+                "data": {
+                    "original_text": result.original_text,
+                    "cleaned_text": result.cleaned_text,
+                    "organized_story": result.organized_story,
+                    "tags": result.tags,
+                    "created_at": result.created_at
+                },
+                "processing_info": result.processing_info
+            }
+        else:
+            return {
+                "success": False,
+                "error": result.error_message,
+                "session_id": result.session_id
+            }
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"처리 중 오류가 발생했습니다: {str(e)}")
+
+@app.get("/api/v1/config")
+async def get_config():
+    """현재 설정 정보 반환"""
+    return {
+        "whisper_model": Config.WHISPER_MODEL,
+        "language": Config.WHISPER_LANGUAGE,
+        "max_audio_size_mb": Config.MAX_AUDIO_SIZE_MB,
+        "llm_model": Config.LLM_MODEL
+    }
+
+if __name__ == "__main__":
+    # 개발 서버 실행
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=True,
+        log_level="info"
+    )

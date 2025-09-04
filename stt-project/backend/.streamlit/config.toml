@@ -1,5 +1,5 @@
 [build]
 # requirements.txt 사용 (배포 안정성)
 requirements = "pyproject.toml"
-# main.py를 진입점으로 사용
-entrypoint = "src/interfaces/streamlit_app.py"
+# streamlit_app.py를 진입점으로 사용 (루트로 이동)
+entrypoint = "streamlit_app.py"
