@@ -1,5 +1,5 @@
 [build]
-# requirements.txt 사용 (배포 안정성)
+# uv 프로젝트용 pyproject.toml 사용
 requirements = "pyproject.toml"
-# streamlit_app.py를 진입점으로 사용 (루트로 이동)
+# streamlit_app.py를 진입점으로 사용
 entrypoint = "streamlit_app.py"

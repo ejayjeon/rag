@@ -20,10 +20,24 @@ class STTProcessor:
         """Whisper 모델 로드"""
         try:
             device = "cuda" if torch.cuda.is_available() else "cpu"
-            self.model = whisper.load_model(self.model_name, device=device)
+            # Streamlit Cloud 환경에서는 CPU만 사용하고 download_root 명시
+            if device == "cpu":
+                self.model = whisper.load_model(
+                    self.model_name, 
+                    device=device,
+                    download_root=None  # 기본 캐시 디렉토리 사용
+                )
+            else:
+                self.model = whisper.load_model(self.model_name, device=device)
             print(f"✅ Whisper {self.model_name} 모델 로드 완료 ({device})")
         except Exception as e:
             print(f"❌ Whisper 모델 로드 실패: {e}")
+            # ffmpeg 오류인 경우 더 자세한 안내
+            if "ffmpeg" in str(e).lower():
+                print("💡 Streamlit Cloud에서 ffmpeg 오류 발생 시:")
+                print("   1. packages.txt 파일에 'ffmpeg' 추가")
+                print("   2. 앱 재배포 필요")
+                print("   3. 또는 다른 오디오 형식 사용 고려")
             raise
     
     def transcribe(self, audio_path: str, language: str = "ko") -> Tuple[str, float]:

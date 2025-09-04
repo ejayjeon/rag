@@ -3,9 +3,10 @@
 ## 🚀 배포 전 체크리스트
 
 ### 1. 필수 파일 확인
-- ✅ `packages.txt` - ffmpeg 의존성
-- ✅ `pyproject.toml` - Python 의존성  
+- ✅ `packages.txt` - ffmpeg 시스템 의존성
+- ✅ `pyproject.toml` - uv 기반 Python 의존성  
 - ✅ `streamlit_app.py` - 루트 디렉토리에 위치
+- ✅ `.streamlit/config.toml` - Streamlit 설정
 - ✅ `.env.example` - 환경 변수 참고용
 
 ### 2. Streamlit Cloud 설정
@@ -51,7 +52,9 @@ SESSION_TIMEOUT_MINUTES = "30"
 backend/
 ├── streamlit_app.py          # 메인 앱 (루트에 위치)
 ├── packages.txt              # 시스템 패키지 (ffmpeg)
-├── pyproject.toml            # Python 의존성
+├── pyproject.toml            # uv 기반 Python 의존성
+├── .streamlit/
+│   └── config.toml           # Streamlit 설정
 ├── .env.example              # 환경 변수 예제
 └── src/                      # 소스 코드
     ├── core/

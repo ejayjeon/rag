@@ -38,14 +38,36 @@ class TextCleaningChain:
     
     def clean(self, text: str) -> Dict[str, Any]:
         """텍스트 정리 실행"""
-        result = self.chain.run(text=text)
-        
-        # 제거된 습관어 추출 (간단한 휴리스틱)
-        filler_words = ["음", "어", "그", "뭐지", "그게", "아니", "잠깐"]
-        removed_fillers = [word for word in filler_words if word in text and word not in result]
-        
-        return {
-            "cleaned_text": result.strip(),
-            "removed_fillers": removed_fillers,
-            "reduction_rate": 1 - len(result) / len(text)
-        }
+        try:
+            # 빈 텍스트 처리
+            if not text or len(text.strip()) == 0:
+                return {
+                    "cleaned_text": "",
+                    "removed_fillers": [],
+                    "reduction_rate": 0.0
+                }
+            
+            result = self.chain.run(text=text)
+            
+            # 제거된 습관어 추출 (간단한 휴리스틱)
+            filler_words = ["음", "어", "그", "뭐지", "그게", "아니", "잠깐"]
+            removed_fillers = [word for word in filler_words if word in text and word not in result]
+            
+            # division by zero 방지
+            original_length = len(text)
+            cleaned_length = len(result)
+            reduction_rate = 1 - (cleaned_length / original_length) if original_length > 0 else 0.0
+            
+            return {
+                "cleaned_text": result.strip(),
+                "removed_fillers": removed_fillers,
+                "reduction_rate": reduction_rate
+            }
+        except Exception as e:
+            print(f"❌ 텍스트 정리 실패: {e}")
+            # 오류 발생 시 원본 텍스트 반환
+            return {
+                "cleaned_text": text.strip() if text else "",
+                "removed_fillers": [],
+                "reduction_rate": 0.0
+            }
