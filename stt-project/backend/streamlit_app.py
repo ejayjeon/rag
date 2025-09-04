@@ -402,7 +402,7 @@ def main():
         else:
             # 실패 결과 표시
             st.error("❌ 처리에 실패했습니다.")
-            st.error(f"오류 메시지: {result.error_message}")
+            st.error(f"오류 메시지: {result}")
     
     # 하단 정보
     st.markdown("---")
