@@ -98,9 +98,46 @@ class STTProcessor:
     
     def _transcribe_with_librosa(self, audio_path: str, language: str, start_time: float) -> Tuple[str, float]:
         """librosa를 사용한 fallback STT 처리"""
+        import os
+        from pathlib import Path
+        
         try:
-            # librosa로 오디오 로드 (ffmpeg 없이 가능)
-            audio, sr = librosa.load(audio_path, sr=16000)
+            print(f"🔍 처리할 파일: {audio_path}")
+            print(f"🔍 파일 확장자: {Path(audio_path).suffix}")
+            
+            # MP4 파일인 경우 특별 처리 필요
+            file_extension = Path(audio_path).suffix.lower()
+            
+            if file_extension in ['.mp4', '.mov', '.avi']:
+                print("📹 비디오 파일 감지 - 오디오 추출 시도")
+                
+                # 1. moviepy를 사용한 오디오 추출 시도
+                try:
+                    from moviepy.editor import VideoFileClip
+                    temp_audio_path = str(Path(audio_path).with_suffix('.wav'))
+                    
+                    print(f"🎬 moviepy로 오디오 추출: {temp_audio_path}")
+                    video = VideoFileClip(audio_path)
+                    video.audio.write_audiofile(temp_audio_path, verbose=False, logger=None)
+                    video.close()
+                    
+                    # 추출된 WAV 파일로 처리
+                    audio, sr = librosa.load(temp_audio_path, sr=16000)
+                    os.remove(temp_audio_path)  # 임시 파일 정리
+                    print("✅ moviepy 오디오 추출 성공")
+                    
+                except ImportError:
+                    print("⚠️ moviepy 없음 - librosa 직접 시도")
+                    audio, sr = librosa.load(audio_path, sr=16000)
+                except Exception as moviepy_error:
+                    print(f"⚠️ moviepy 실패: {moviepy_error} - librosa 직접 시도")
+                    audio, sr = librosa.load(audio_path, sr=16000)
+            else:
+                # 일반 오디오 파일
+                print("🎵 오디오 파일 - librosa 직접 처리")
+                audio, sr = librosa.load(audio_path, sr=16000)
+            
+            print(f"🔍 로드된 오디오 길이: {len(audio)/sr:.2f}초")
             
             # Whisper에 numpy 배열로 직접 전달
             result = self.model.transcribe(
@@ -111,6 +148,7 @@ class STTProcessor:
             )
             
             text = result["text"].strip()
+            print(f"🎯 인식된 텍스트: {text[:50]}...")
             
             # 신뢰도 계산
             if "segments" in result:
@@ -125,4 +163,8 @@ class STTProcessor:
             
         except Exception as fallback_error:
             print(f"❌ librosa fallback도 실패: {fallback_error}")
+            print(f"   파일 경로: {audio_path}")
+            print(f"   파일 존재: {os.path.exists(audio_path)}")
+            if os.path.exists(audio_path):
+                print(f"   파일 크기: {os.path.getsize(audio_path)} bytes")
             raise Exception(f"STT 처리 완전 실패 - 직접: ffmpeg 없음, librosa: {str(fallback_error)}")
