@@ -44,22 +44,29 @@ if str(project_root) not in sys.path:
 
 # Streamlit 앱 import 및 실행
 if __name__ == "__main__":
+    # Streamlit 앱 파일 경로 확인
+    streamlit_app_path = project_root / "src" / "interfaces" / "streamlit_app.py"
+    print(f"🎯 Streamlit 앱 경로: {streamlit_app_path}")
+    print(f"📁 앱 파일 존재 여부: {streamlit_app_path.exists()}")
+    
     # Streamlit 앱 직접 import
     try:
         from src.interfaces.streamlit_app import main
+        print("✅ Streamlit 앱 모듈 import 성공")
         main()
     except ImportError as e:
-        print(f"Import error: {e}")
+        print(f"❌ Import error: {e}")
         print(f"Current working directory: {os.getcwd()}")
         print(f"Python path: {sys.path[:3]}...")
         print(f"Project root: {project_root}")
         
         # Fallback: streamlit CLI 사용
+        print("🔄 Streamlit CLI로 fallback 실행")
         import streamlit.web.cli as stcli
         sys.argv = [
             "streamlit", 
             "run", 
-            str(project_root / "src" / "interfaces" / "streamlit_app.py"),
+            str(streamlit_app_path),
             "--server.port=8501",
             "--server.address=0.0.0.0"
         ]

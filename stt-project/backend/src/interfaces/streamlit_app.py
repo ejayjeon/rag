@@ -344,33 +344,33 @@ def main():
         st.markdown("**🎯 다음 단계**")
         st.caption("FastAPI 서버화 → Flutter 앱 연동")
 
-# 개발 디버깅 정보 (사이드바 하단)
-def render_debug_info():
-    with st.sidebar:
-        st.markdown("---")
-        with st.expander("🔧 디버그 정보"):
-            st.markdown("**Python 버전**")
-            import sys
-            st.code(f"{sys.version}")
+# # 개발 디버깅 정보 (사이드바 하단)
+# def render_debug_info():
+#     with st.sidebar:
+#         st.markdown("---")
+#         with st.expander("🔧 디버그 정보"):
+#             st.markdown("**Python 버전**")
+#             import sys
+#             st.code(f"{sys.version}")
             
-            st.markdown("**설치된 패키지 확인**")
-            try:
-                import whisper
-                st.success("✅ Whisper 설치됨")
-            except ImportError:
-                st.error("❌ Whisper 없음")
+#             st.markdown("**설치된 패키지 확인**")
+#             try:
+#                 import whisper
+#                 st.success("✅ Whisper 설치됨")
+#             except ImportError:
+#                 st.error("❌ Whisper 없음")
             
-            try:
-                import langchain
-                st.success("✅ LangChain 설치됨")
-            except ImportError:
-                st.error("❌ LangChain 없음")
+#             try:
+#                 import langchain
+#                 st.success("✅ LangChain 설치됨")
+#             except ImportError:
+#                 st.error("❌ LangChain 없음")
             
-            try:
-                import langgraph
-                st.success("✅ LangGraph 설치됨")
-            except ImportError:
-                st.error("❌ LangGraph 없음")
+#             try:
+#                 import langgraph
+#                 st.success("✅ LangGraph 설치됨")
+#             except ImportError:
+#                 st.error("❌ LangGraph 없음")
 
 if __name__ == "__main__":
     # 개발 중에는 디버그 정보도 표시

@@ -1,6 +1,8 @@
 [build]
 # requirements.txt 사용 (배포 안정성)
 requirements = "stt-project/backend/requirements.txt"
+# main.py를 진입점으로 사용
+entrypoint = "stt-project/backend/main.py"
 
 [server]
 # 배포 환경 설정
