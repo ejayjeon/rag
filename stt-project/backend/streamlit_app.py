@@ -9,8 +9,26 @@ import json
 from datetime import datetime
 
 # 프로젝트 루트를 Python path에 추가 (배포 환경 대응)
-# streamlit_app.py가 backend 루트에 있으므로 현재 디렉토리가 프로젝트 루트
-project_root = Path(__file__).parent
+# Streamlit Cloud와 로컬 환경 모두 호환되는 방식
+current_dir = Path.cwd()
+file_dir = Path(__file__).parent
+
+# 가능한 프로젝트 루트 경로들 확인
+possible_roots = [
+    file_dir,  # streamlit_app.py가 있는 디렉토리 (로컬)
+    current_dir,  # 현재 작업 디렉토리 (Streamlit Cloud)
+    Path("/mount/src/rag/stt-project/backend"),  # Streamlit Cloud 절대 경로
+]
+
+project_root = None
+for root in possible_roots:
+    if root.exists() and (root / "src").exists():
+        project_root = root
+        break
+
+if project_root is None:
+    # fallback: 현재 디렉토리 사용
+    project_root = current_dir
 
 # Python path에 추가
 if str(project_root) not in sys.path:
@@ -20,10 +38,13 @@ if str(project_root) not in sys.path:
 from src.services.voice_service import VoiceProcessingService
 from src.core.config import Config
 
-# 개발용 디버그 정보 (필요시 주석 해제)
-# st.write(f"프로젝트 루트: {project_root}")
-# st.write(f"Config: {Config}")
-# st.write(f"VoiceProcessingService: {VoiceProcessingService}")
+# 배포 디버그 정보 (배포 환경에서 경로 확인용)
+st.write("🔍 **배포 디버그 정보**")
+st.write(f"**현재 작업 디렉토리**: {Path.cwd()}")
+st.write(f"**파일 위치**: {Path(__file__)}")
+st.write(f"**선택된 프로젝트 루트**: {project_root}")
+st.write(f"**src 폴더 존재 여부**: {(project_root / 'src').exists()}")
+st.write("---")
 
 # Streamlit 페이지 설정
 st.set_page_config(
