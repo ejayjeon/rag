@@ -374,7 +374,7 @@ def main():
 
 if __name__ == "__main__":
     # 개발 중에는 디버그 정보도 표시
-    render_debug_info()
+    # render_debug_info()
     main()
     
     # 개발용 리셋 버튼 (사이드바)
