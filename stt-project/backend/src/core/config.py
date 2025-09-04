@@ -85,14 +85,25 @@ class Config:
     @classmethod
     def is_streamlit_cloud(cls) -> bool:
         """Streamlit Cloud 환경인지 확인"""
-        # Streamlit Cloud 특징: /app/ 경로 사용, 특정 환경 변수
         import sys
-        return (
-            "/app/" in str(Path.cwd()) or 
-            "/mount/src/" in str(Path.cwd()) or
-            "STREAMLIT_CLOUD" in os.environ or
-            "streamlit" in sys.modules
-        )
+        
+        # Streamlit Cloud 감지 조건들
+        cloud_indicators = [
+            "/app/" in str(Path.cwd()),                    # Streamlit Cloud 기본 경로
+            "/mount/src/" in str(Path.cwd()),              # GitHub 연동 경로
+            "STREAMLIT_CLOUD" in os.environ,               # 환경 변수
+            "STREAMLIT" in os.environ,                     # 대안 환경 변수
+            hasattr(sys, 'ps1') is False,                  # 비대화형 환경
+            "streamlit" in str(sys.executable).lower(),    # Streamlit 실행 환경
+        ]
+        
+        is_cloud = any(cloud_indicators)
+        print(f"🔍 Streamlit Cloud 감지 결과: {is_cloud}")
+        print(f"   - 현재 경로: {Path.cwd()}")
+        print(f"   - Python 실행파일: {sys.executable}")
+        print(f"   - 환경 변수 STREAMLIT: {'STREAMLIT' in os.environ}")
+        
+        return is_cloud
     
     @classmethod
     def ensure_directories(cls):

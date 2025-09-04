@@ -17,10 +17,19 @@ class VoiceProcessingWorkflow:
     def __init__(self, llm_provider: str = None):
         self.llm_provider = llm_provider
         
-        # STT는 항상 Whisper 사용 (Streamlit Cloud에서는 강제 librosa)
+        # STT는 항상 Whisper 사용 (배포 환경에서는 강제 librosa)
         from .config import Config
         force_librosa = Config.is_streamlit_cloud()
-        print(f"🔍 Streamlit Cloud 감지: {force_librosa}")
+        
+        # 임시: 환경 감지 실패 시 강제 활성화
+        if not force_librosa:
+            # packages.txt 파일 존재 = 배포 환경으로 간주
+            packages_txt = Path(__file__).parent.parent.parent / "packages.txt"
+            if packages_txt.exists():
+                force_librosa = True
+                print("📦 packages.txt 발견 → 배포 환경으로 간주, librosa 강제 활성화")
+        
+        print(f"🔍 최종 librosa 강제 모드: {force_librosa}")
         self.stt_processor = STTProcessor(force_librosa=force_librosa)
         
         # LLM 체인들은 provider에 따라 다른 LLM 사용

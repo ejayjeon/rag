@@ -72,6 +72,24 @@ with st.expander("🔍 **배포 디버그 정보**", expanded=False):
     env_status = check_environment()
     for key, value in env_status.items():
         st.write(f"**{key}**: {value}")
+    
+    # STT 환경 디버깅
+    st.write("### 🎤 STT 환경 디버깅")
+    from src.core.config import Config
+    st.write(f"**Streamlit Cloud 감지**: {Config.is_streamlit_cloud()}")
+    st.write(f"**현재 작업 디렉토리**: {Path.cwd()}")
+    
+    # librosa 사용 가능 여부
+    try:
+        import librosa
+        st.write(f"**librosa 사용 가능**: ✅ Yes")
+    except ImportError:
+        st.write(f"**librosa 사용 가능**: ❌ No")
+    
+    # ffmpeg 관련 정보
+    import os
+    st.write(f"**PATH 환경변수**: {os.environ.get('PATH', 'Not found')[:100]}...")
+    st.write(f"**ffmpeg 경로 확인**: {os.system('which ffmpeg') == 0 if os.name != 'nt' else 'Windows'}")
 
 st.write("---")
 
