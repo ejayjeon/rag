@@ -10,11 +10,16 @@ from src.chains.tagging_chain import HashtagExtractionChain
 from src.core.state import ProcessingResult, VoiceProcessingState
 import time
 import uuid
+import subprocess
+import shutil
+from pathlib import Path
 
 class VoiceProcessingWorkflow:
     """음성 처리 워크플로우"""
     
     def __init__(self, llm_provider: str = None):
+        # ffmpeg 설치 확인 및 설정
+        self._check_and_setup_ffmpeg()
         self.llm_provider = llm_provider
         
         # STT는 항상 Whisper 사용 (배포 환경에서는 강제 librosa)
@@ -38,6 +43,82 @@ class VoiceProcessingWorkflow:
         self.tagging_chain = HashtagExtractionChain(provider=llm_provider)
         
         self.workflow = self._create_workflow()
+    
+    def _check_and_setup_ffmpeg(self):
+        """ffmpeg 설치 확인 및 환경 설정"""
+        try:
+            # 1. ffmpeg 명령어 확인
+            ffmpeg_path = shutil.which('ffmpeg')
+            if ffmpeg_path:
+                print(f"✅ ffmpeg 발견: {ffmpeg_path}")
+                return
+            
+            # 2. 일반적인 경로들 확인
+            common_paths = [
+                '/usr/bin/ffmpeg',
+                '/usr/local/bin/ffmpeg',
+                '/opt/conda/bin/ffmpeg',
+                '/home/appuser/.local/bin/ffmpeg'
+            ]
+            
+            for path in common_paths:
+                if Path(path).exists():
+                    print(f"✅ ffmpeg 발견 (직접 경로): {path}")
+                    # PATH에 추가
+                    import os
+                    current_path = os.environ.get('PATH', '')
+                    if path not in current_path:
+                        os.environ['PATH'] = f"{Path(path).parent}:{current_path}"
+                        print(f"🔧 PATH에 추가: {Path(path).parent}")
+                    return
+            
+            # 3. apt로 설치 시도 (Streamlit Cloud에서)
+            print("🔍 ffmpeg를 찾을 수 없음. 설치 시도...")
+            try:
+                result = subprocess.run(
+                    ['apt', 'update'], 
+                    capture_output=True, 
+                    text=True, 
+                    timeout=30
+                )
+                if result.returncode == 0:
+                    result = subprocess.run(
+                        ['apt', 'install', '-y', 'ffmpeg'], 
+                        capture_output=True, 
+                        text=True, 
+                        timeout=60
+                    )
+                    if result.returncode == 0:
+                        print("✅ ffmpeg 설치 성공")
+                        return
+                    else:
+                        print(f"⚠️ ffmpeg 설치 실패: {result.stderr}")
+                else:
+                    print(f"⚠️ apt update 실패: {result.stderr}")
+            except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+                print(f"⚠️ apt 설치 시도 실패: {e}")
+            
+            # 4. conda로 설치 시도
+            try:
+                result = subprocess.run(
+                    ['conda', 'install', '-y', 'ffmpeg'], 
+                    capture_output=True, 
+                    text=True, 
+                    timeout=60
+                )
+                if result.returncode == 0:
+                    print("✅ conda로 ffmpeg 설치 성공")
+                    return
+                else:
+                    print(f"⚠️ conda ffmpeg 설치 실패: {result.stderr}")
+            except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+                print(f"⚠️ conda 설치 시도 실패: {e}")
+            
+            print("❌ ffmpeg 설치 실패 - librosa fallback 모드로 진행")
+            
+        except Exception as e:
+            print(f"⚠️ ffmpeg 확인 중 오류: {e}")
+            print("❌ ffmpeg 설정 실패 - librosa fallback 모드로 진행")
     
     def _create_workflow(self) -> StateGraph:
         """LangGraph 워크플로우 생성"""

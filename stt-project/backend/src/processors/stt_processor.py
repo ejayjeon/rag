@@ -7,6 +7,9 @@ import torch
 from typing import Dict, Tuple
 import time
 import numpy as np
+import os
+import shutil
+from pathlib import Path
 try:
     import librosa
     LIBROSA_AVAILABLE = True
@@ -21,7 +24,47 @@ class STTProcessor:
         self.language = language
         self.model = None
         self.force_librosa = force_librosa  # Streamlit Cloud용 강제 librosa 사용
+        
+        # ffmpeg 경로 설정
+        self._setup_ffmpeg_path()
         self._load_model()
+
+    def _setup_ffmpeg_path(self):
+        """ffmpeg 경로 설정 및 환경 변수 구성"""
+        try:
+            # 1. ffmpeg 명령어 확인
+            ffmpeg_path = shutil.which('ffmpeg')
+            if ffmpeg_path:
+                print(f"✅ STT: ffmpeg 발견: {ffmpeg_path}")
+                return
+            
+            # 2. 일반적인 경로들 확인
+            common_paths = [
+                '/usr/bin/ffmpeg',
+                '/usr/local/bin/ffmpeg',
+                '/opt/conda/bin/ffmpeg',
+                '/home/appuser/.local/bin/ffmpeg',
+                '/usr/share/ffmpeg/ffmpeg'
+            ]
+            
+            for path in common_paths:
+                if Path(path).exists():
+                    print(f"✅ STT: ffmpeg 발견 (직접 경로): {path}")
+                    # PATH에 추가
+                    current_path = os.environ.get('PATH', '')
+                    if path not in current_path:
+                        os.environ['PATH'] = f"{Path(path).parent}:{current_path}"
+                        print(f"🔧 STT: PATH에 추가: {Path(path).parent}")
+                    
+                    # FFMPEG_BINARY 환경 변수 설정 (Whisper가 사용)
+                    os.environ['FFMPEG_BINARY'] = path
+                    print(f"🔧 STT: FFMPEG_BINARY 설정: {path}")
+                    return
+            
+            print("⚠️ STT: ffmpeg를 찾을 수 없음 - librosa fallback 모드 사용")
+            
+        except Exception as e:
+            print(f"⚠️ STT: ffmpeg 경로 설정 중 오류: {e}")
 
     def _load_model(self):
         """Whisper 모델 로드"""
@@ -84,6 +127,40 @@ class STTProcessor:
             print(f"🔍 LIBROSA_AVAILABLE: {LIBROSA_AVAILABLE}")
             print(f"🔍 ffmpeg in error: {'ffmpeg' in str(e).lower()}")
             print(f"🔍 Error type: {type(e).__name__}")
+            
+            # ffmpeg 관련 오류인 경우 추가 시도
+            if "ffmpeg" in str(e).lower() or "No such file" in str(e):
+                print("🔧 ffmpeg 관련 오류 감지 - 추가 시도...")
+                
+                # FFMPEG_BINARY 환경 변수 재설정 시도
+                try:
+                    ffmpeg_path = shutil.which('ffmpeg')
+                    if ffmpeg_path:
+                        os.environ['FFMPEG_BINARY'] = ffmpeg_path
+                        print(f"🔧 FFMPEG_BINARY 재설정: {ffmpeg_path}")
+                        
+                        # 한 번 더 시도
+                        result = self.model.transcribe(
+                            audio_path,
+                            language=language,
+                            fp16=False,
+                            verbose=False,
+                            without_timestamps=False,
+                            decode_options={"beam_size": 5, "best_of": 5}
+                        )
+                        
+                        text = result["text"].strip()
+                        if "segments" in result:
+                            confidences = [seg.get("confidence", 0.0) for seg in result["segments"]]
+                            avg_confidence = sum(confidences) / len(confidences) if confidences else 0.0
+                        else:
+                            avg_confidence = 0.8
+                        
+                        processing_time = time.time() - start_time
+                        print("✅ FFMPEG_BINARY 재설정 후 성공!")
+                        return text, avg_confidence, processing_time
+                except Exception as retry_error:
+                    print(f"⚠️ FFMPEG_BINARY 재설정 후에도 실패: {retry_error}")
             
             # 모든 오디오 관련 오류에 대해 librosa fallback 시도
             if LIBROSA_AVAILABLE and ("ffmpeg" in str(e).lower() or "audio" in str(e).lower() or "No such file" in str(e)):

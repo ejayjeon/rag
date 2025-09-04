@@ -34,6 +34,21 @@ if project_root is None:
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
+# ffmpeg 설치 스크립트 실행 (Streamlit Cloud에서만)
+try:
+    # Streamlit Cloud 환경 감지
+    if os.getenv('STREAMLIT_CLOUD_ENVIRONMENT') or Path('/mount/src').exists():
+        print("🌐 Streamlit Cloud 환경 감지 - ffmpeg 설치 시도...")
+        import subprocess
+        result = subprocess.run([sys.executable, 'install_ffmpeg.py'], 
+                              capture_output=True, text=True, timeout=60)
+        if result.returncode == 0:
+            print("✅ ffmpeg 설치 스크립트 실행 완료")
+        else:
+            print(f"⚠️ ffmpeg 설치 스크립트 실행 실패: {result.stderr}")
+except Exception as e:
+    print(f"⚠️ ffmpeg 설치 스크립트 실행 중 오류: {e}")
+
 # 프로젝트 모듈 import
 from src.services.voice_service import VoiceProcessingService
 from src.core.config import Config
