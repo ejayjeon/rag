@@ -1,5 +1,5 @@
 # Auto-generated from pyproject.toml
-# Generated at: 2025-09-05T08:18:09Z
+# Generated at: 2025-09-05T08:23:26Z
 
 # Torch CPU version for Streamlit Cloud
 --find-links https://download.pytorch.org/whl/torch_stable.html
