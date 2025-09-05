@@ -290,16 +290,29 @@ def load_text_processor():
 @st.cache_data(show_spinner=False)
 def process_audio_cached(file_bytes, file_name, language=None):
     """Process audio with caching."""
+
+        # 디버깅 정보 추가
+    st.write(f"🔍 디버깅 정보:")
+    st.write(f"- 파일명: {file_name}")
+    st.write(f"- 파일 크기: {len(file_bytes)} bytes")
+    st.write(f"- 파일 확장자: {Path(file_name).suffix}")
+    st.write(f"- 언어: {language}")
+    
     # Create temp file
     with tempfile.NamedTemporaryFile(suffix=Path(file_name).suffix, delete=False) as tmp:
         tmp.write(file_bytes)
         tmp_path = tmp.name
+
+    st.write(f"- 임시 파일 경로: {tmp_path}")
+    st.write(f"- 임시 파일 존재 여부: {os.path.exists(tmp_path)}")
     
     processed_path = None  # 초기화 추가
     
     try:
         # Preprocess audio
+        st.write("🎵 AudioSegment.from_file() 호출 중...")
         audio = AudioSegment.from_file(tmp_path)
+        st.write(f"✅ 오디오 로드 성공: {len(audio)}ms, {audio.frame_rate}Hz")
         
         # Normalize volume
         target_dBFS = -20.0
@@ -322,6 +335,7 @@ def process_audio_cached(file_bytes, file_name, language=None):
         audio.export(processed_path, format='wav')
         
         # Transcribe
+        model = load_whisper_model()
         result = model.transcribe(
             processed_path,
             language=language,
@@ -330,6 +344,13 @@ def process_audio_cached(file_bytes, file_name, language=None):
         )
         
         return result
+        
+    except Exception as e:
+        st.error(f"❌ 오디오 처리 중 오류 발생: {str(e)}")
+        st.error(f"오류 타입: {type(e).__name__}")
+        import traceback
+        st.error(f"상세 오류: {traceback.format_exc()}")
+        return None    
         
     finally:
         # Cleanup - processed_path가 None이 아닐 때만 삭제
