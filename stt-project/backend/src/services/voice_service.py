@@ -46,18 +46,27 @@ class VoiceProcessingService:
     
     def process_uploaded_audio(self, uploaded_file, original_filename: str) -> ProcessingResult:
         """업로드된 오디오 파일 처리 (Streamlit/FastAPI용)"""
-        # 임시 파일로 저장
-        temp_path = Config.TEMP_DIR / f"temp_{original_filename}"
+        from src.utils.file_utils import safe_filename_for_temp
+        
+        # 안전한 임시 파일명 생성 (한글 파일명 지원)
+        safe_filename = safe_filename_for_temp(original_filename)
+        temp_path = Config.TEMP_DIR / safe_filename
         
         try:
-            # 파일 저장
+            # 임시 디렉토리 생성 (존재하지 않는 경우)
+            Config.TEMP_DIR.mkdir(parents=True, exist_ok=True)
+            
+            # 파일 저장 (UTF-8 경로 지원)
             if hasattr(uploaded_file, 'read'):
                 # Streamlit UploadedFile
                 with open(temp_path, 'wb') as f:
+                    uploaded_file.seek(0)  # 파일 포인터를 처음으로
                     f.write(uploaded_file.read())
+                print(f"✅ 파일 저장 완료: {temp_path}")
             else:
                 # 일반 파일 객체
                 shutil.copy(uploaded_file, temp_path)
+                print(f"✅ 파일 복사 완료: {temp_path}")
             
             # 처리 실행
             result = self.process_audio_file(str(temp_path))

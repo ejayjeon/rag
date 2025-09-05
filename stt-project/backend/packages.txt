@@ -4,3 +4,5 @@ libavformat-dev
 libavutil-dev
 libswscale-dev
 libswresample-dev
+locales
+locales-all

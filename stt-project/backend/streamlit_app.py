@@ -276,6 +276,11 @@ def main():
                         status_text.text("📁 파일을 저장하고 있습니다...")
                         progress_bar.progress(0.1)
                         
+                        # 파일명 디버깅 정보
+                        from src.utils.file_utils import get_file_encoding_info
+                        file_info = get_file_encoding_info(Path(uploaded_file.name))
+                        st.write(f"📁 파일 정보: {file_info}")
+                        
                         # 처리 실행
                         result = voice_service.process_uploaded_audio(
                             uploaded_file, 
