@@ -246,17 +246,52 @@ import shutil
 ffmpeg_path = shutil.which("ffmpeg")
 ffprobe_path = shutil.which("ffprobe")
 
+# 대체 경로들 확인
+possible_ffmpeg_paths = [
+    "/usr/bin/ffmpeg",
+    "/usr/local/bin/ffmpeg",
+    "/opt/conda/bin/ffmpeg",
+    "/home/adminuser/.local/bin/ffmpeg"
+]
+
+possible_ffprobe_paths = [
+    "/usr/bin/ffprobe", 
+    "/usr/local/bin/ffprobe",
+    "/opt/conda/bin/ffprobe",
+    "/home/adminuser/.local/bin/ffprobe"
+]
+
+# FFmpeg 경로 찾기
+if not ffmpeg_path:
+    for path in possible_ffmpeg_paths:
+        if os.path.exists(path):
+            ffmpeg_path = path
+            break
+
+# FFprobe 경로 찾기  
+if not ffprobe_path:
+    for path in possible_ffprobe_paths:
+        if os.path.exists(path):
+            ffprobe_path = path
+            break
+
 if ffmpeg_path:
     AudioSegment.converter = ffmpeg_path
     st.write(f"✅ FFmpeg 경로 설정: {ffmpeg_path}")
 else:
     st.warning("⚠️ FFmpeg를 찾을 수 없습니다.")
+    st.write("시도한 경로들:")
+    for path in possible_ffmpeg_paths:
+        st.write(f"- {path}: {'존재' if os.path.exists(path) else '없음'}")
 
 if ffprobe_path:
     AudioSegment.ffprobe = ffprobe_path
     st.write(f"✅ FFprobe 경로 설정: {ffprobe_path}")
 else:
     st.warning("⚠️ FFprobe를 찾을 수 없습니다.")
+    st.write("시도한 경로들:")
+    for path in possible_ffprobe_paths:
+        st.write(f"- {path}: {'존재' if os.path.exists(path) else '없음'}")
 
 # 환경 감지
 IS_STREAMLIT_CLOUD = os.getenv("STREAMLIT_SHARING_MODE") == "true"

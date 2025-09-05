@@ -1,17 +1,6 @@
 ffmpeg
 ffprobe
 libavcodec-extra
-libsndfile1
 build-essential
 python3-dev
 git
-libasound2-dev
-portaudio19-dev
-libsndfile1-dev
-libffi-dev
-libssl-dev
-libavformat-dev
-libavcodec-dev
-libavutil-dev
-libswresample-dev
-libswscale-dev
