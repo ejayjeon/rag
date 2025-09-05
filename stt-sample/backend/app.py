@@ -290,12 +290,64 @@ def load_text_processor():
 @st.cache_data(show_spinner=False)
 def process_audio_cached(file_bytes, file_name, language=None):
     """Process audio with caching."""
-    import whisper
-    from pydub import AudioSegment
-    from pydub.silence import detect_nonsilent
-    import io
     
-    model = load_whisper_model()
+    # 라이브러리 import 상태 확인 및 표시
+    import_status = {}
+    import_errors = []
+    
+    try:
+        import whisper
+        import_status['whisper'] = f"✅ whisper v{whisper.__version__}"
+    except ImportError as e:
+        import_status['whisper'] = f"❌ whisper: {str(e)}"
+        import_errors.append(f"whisper: {str(e)}")
+    
+    try:
+        from pydub import AudioSegment
+        import_status['pydub'] = f"✅ pydub (AudioSegment)"
+    except ImportError as e:
+        import_status['pydub'] = f"❌ pydub: {str(e)}"
+        import_errors.append(f"pydub: {str(e)}")
+    
+    try:
+        from pydub.silence import detect_nonsilent
+        import_status['pydub_silence'] = f"✅ pydub.silence"
+    except ImportError as e:
+        import_status['pydub_silence'] = f"❌ pydub.silence: {str(e)}"
+        import_errors.append(f"pydub.silence: {str(e)}")
+    
+    try:
+        import io
+        import_status['io'] = f"✅ io (built-in)"
+    except ImportError as e:
+        import_status['io'] = f"❌ io: {str(e)}"
+        import_errors.append(f"io: {str(e)}")
+    
+    # 화면에 라이브러리 상태 표시
+    with st.expander("🔍 라이브러리 Import 상태", expanded=False):
+        st.write("**필수 라이브러리 상태:**")
+        for lib, status in import_status.items():
+            st.write(f"- {lib}: {status}")
+        
+        if import_errors:
+            st.error("**Import 오류:**")
+            for error in import_errors:
+                st.write(f"❌ {error}")
+        else:
+            st.success("✅ 모든 라이브러리가 정상적으로 import되었습니다!")
+    
+    # Import 오류가 있으면 처리 중단
+    if import_errors:
+        st.error("라이브러리 import 오류로 인해 오디오 처리를 중단합니다.")
+        return None
+    
+    # Whisper 모델 로드 상태 확인
+    try:
+        model = load_whisper_model()
+        st.info("✅ Whisper 모델이 성공적으로 로드되었습니다.")
+    except Exception as e:
+        st.error(f"❌ Whisper 모델 로드 실패: {str(e)}")
+        return None
     
     # Create temp file
     with tempfile.NamedTemporaryFile(suffix=Path(file_name).suffix, delete=False) as tmp:
@@ -339,7 +391,7 @@ def process_audio_cached(file_bytes, file_name, language=None):
     finally:
         # Cleanup
         for path in [tmp_path, processed_path]:
-            if os.path.exists(path):
+            if path and os.path.exists(path):
                 os.remove(path)
 
 def remove_fillers(text, language='auto'):

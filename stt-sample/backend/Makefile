@@ -113,7 +113,13 @@ requirements:
 	@echo "--find-links https://download.pytorch.org/whl/torch_stable.html" >> requirements.txt
 	@echo "torch==2.1.0+cpu" >> requirements.txt
 	@echo "" >> requirements.txt
-	@grep -v "torch" requirements_temp.txt >> requirements.txt
+	@echo "# Audio processing dependencies" >> requirements.txt
+	@echo "openai-whisper==20250625" >> requirements.txt
+	@echo "pydub==0.25.1" >> requirements.txt
+	@echo "numpy==2.3.2" >> requirements.txt
+	@echo "" >> requirements.txt
+	@echo "# Other dependencies" >> requirements.txt
+	@grep -v "torch\|openai-whisper\|pydub\|numpy" requirements_temp.txt >> requirements.txt
 	@rm requirements_temp.txt
 	@echo "✅ requirements.txt 생성 완료"
 
