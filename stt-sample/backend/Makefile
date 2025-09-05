@@ -125,25 +125,7 @@ requirements:
 	@grep -Ev '^(torch==|openai-whisper==|pydub==|numpy==)' requirements_temp.txt >> requirements.txt
 	@rm -f requirements_temp.txt
 	@echo "✅ requirements.txt 생성 완료"
-requirements-faster:
-	@echo "📋 requirements.txt(faster-whisper) 생성 중..."
-	@uv pip compile pyproject.toml --no-deps -q > requirements_temp.txt
 
-	@{ \
-	  echo "# Auto-generated from pyproject.toml (faster-whisper)"; \
-	  echo "# Generated at: $$(date -u +'%Y-%m-%dT%H:%M:%SZ')"; \
-	  echo; \
-	  echo "# Audio processing (CTranslate2 backend)"; \
-	  echo "faster-whisper==1.0.2"; \
-	  echo "pydub==0.25.1"; \
-	  echo "numpy==2.3.2"; \
-	  echo; \
-	  echo "# Other dependencies"; \
-	} > requirements.txt
-
-	@grep -Ev '^(torch==|openai-whisper==|faster-whisper==|pydub==|numpy==)' requirements_temp.txt >> requirements.txt
-	@rm -f requirements_temp.txt
-	@echo "✅ requirements.txt(faster) 생성 완료"
 
 # 배포 준비 상태 확인
 check-deploy:
