@@ -191,14 +191,7 @@ deploy: requirements
 		exit 1; \
 	fi; \
 	echo "✅ Git 저장소 발견: $$GIT_ROOT"; \
-	\
-	# stt-sample 프로젝트 루트로 파일 복사
-	echo "📁 Streamlit Cloud용 파일 복사 중..."; \
-	cp packages.txt "../"; \
-	cp requirements.txt "../"; \
-	cp app.py "../streamlit_app.py"; \
-	echo "✅ 파일 복사 완료"; \
-	\
+		\
 	cd "$$GIT_ROOT" && git add . && git commit -m "Deploy: $$(date '+%Y-%m-%d %H:%M:%S')" && git push -u origin $$(git branch --show-current); \
 	echo ""; \
 	echo "✅ 배포 완료!"; \
