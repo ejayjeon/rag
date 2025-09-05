@@ -239,6 +239,25 @@ from pydub import AudioSegment
 from pydub.silence import detect_nonsilent
 import io
 
+# FFmpeg 경로 설정 (Streamlit Cloud용)
+import shutil
+
+# FFmpeg 경로 찾기 및 설정
+ffmpeg_path = shutil.which("ffmpeg")
+ffprobe_path = shutil.which("ffprobe")
+
+if ffmpeg_path:
+    AudioSegment.converter = ffmpeg_path
+    st.write(f"✅ FFmpeg 경로 설정: {ffmpeg_path}")
+else:
+    st.warning("⚠️ FFmpeg를 찾을 수 없습니다.")
+
+if ffprobe_path:
+    AudioSegment.ffprobe = ffprobe_path
+    st.write(f"✅ FFprobe 경로 설정: {ffprobe_path}")
+else:
+    st.warning("⚠️ FFprobe를 찾을 수 없습니다.")
+
 # 환경 감지
 IS_STREAMLIT_CLOUD = os.getenv("STREAMLIT_SHARING_MODE") == "true"
 
