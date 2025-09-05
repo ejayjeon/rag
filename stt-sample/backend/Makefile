@@ -114,7 +114,7 @@ requirements:
 	@echo "torch==2.1.0+cpu" >> requirements.txt
 	@echo "" >> requirements.txt
 	@echo "# Audio processing dependencies" >> requirements.txt
-	@echo "openai-whisper==20250625" >> requirements.txt
+	@echo "openai-whisper==20240930" >> requirements.txt
 	@echo "pydub==0.25.1" >> requirements.txt
 	@echo "numpy==2.3.2" >> requirements.txt
 	@echo "" >> requirements.txt

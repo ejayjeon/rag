@@ -6,7 +6,7 @@
 torch==2.1.0+cpu
 
 # Audio processing dependencies
-openai-whisper==20250625
+openai-whisper==20240930
 pydub==0.25.1
 numpy==2.3.2
 

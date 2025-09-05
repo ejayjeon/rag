@@ -275,6 +275,14 @@ if not ffprobe_path:
             ffprobe_path = path
             break
 
+# 시스템 정보 확인
+st.write("🔍 시스템 정보:")
+st.write(f"- OS: {os.name}")
+st.write(f"- Python 경로: {os.sys.executable}")
+
+# PATH 환경변수 확인
+st.write(f"- PATH: {os.environ.get('PATH', 'Not set')}")
+
 if ffmpeg_path:
     AudioSegment.converter = ffmpeg_path
     st.write(f"✅ FFmpeg 경로 설정: {ffmpeg_path}")
@@ -283,6 +291,10 @@ else:
     st.write("시도한 경로들:")
     for path in possible_ffmpeg_paths:
         st.write(f"- {path}: {'존재' if os.path.exists(path) else '없음'}")
+    
+    # 대안: pydub 없이 처리하는 방법 제안
+    st.error("FFmpeg가 없어서 pydub를 사용할 수 없습니다.")
+    st.info("💡 해결 방법: packages.txt에 올바른 FFmpeg 패키지가 설치되었는지 확인하세요.")
 
 if ffprobe_path:
     AudioSegment.ffprobe = ffprobe_path
