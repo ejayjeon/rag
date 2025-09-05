@@ -238,6 +238,7 @@ import whisper
 from pydub import AudioSegment
 from pydub.silence import detect_nonsilent
 import io
+import ffmpeg
 
 # FFmpeg 경로 설정 (Streamlit Cloud용)
 import shutil
