@@ -1,0 +1,6 @@
+ffmpeg
+libavcodec-extra
+libsndfile1
+build-essential
+python3-dev
+git
