@@ -210,11 +210,11 @@ deploy: requirements
 	fi; \
 	echo "✅ Git 저장소 발견: $$GIT_ROOT"; \
 	\
-	# Streamlit Cloud용 파일들을 루트에 복사
+	# stt-sample 프로젝트 루트로 파일 복사
 	echo "📁 Streamlit Cloud용 파일 복사 중..."; \
-	cp packages.txt "$$GIT_ROOT/"; \
-	cp requirements.txt "$$GIT_ROOT/"; \
-	cp app.py "$$GIT_ROOT/streamlit_app.py"; \
+	cp packages.txt "../"; \
+	cp requirements.txt "../"; \
+	cp app.py "../streamlit_app.py"; \
 	echo "✅ 파일 복사 완료"; \
 	\
 	cd "$$GIT_ROOT" && git add . && git commit -m "Deploy: $$(date '+%Y-%m-%d %H:%M:%S')" && git push -u origin $$(git branch --show-current); \
