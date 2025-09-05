@@ -234,6 +234,10 @@ import os
 from pathlib import Path
 from datetime import datetime
 import json
+import whisper
+from pydub import AudioSegment
+from pydub.silence import detect_nonsilent
+import io
 
 # 환경 감지
 IS_STREAMLIT_CLOUD = os.getenv("STREAMLIT_SHARING_MODE") == "true"
@@ -262,7 +266,6 @@ st.set_page_config(
 @st.cache_resource(show_spinner=False)
 def load_whisper_model():
     """Load and cache Whisper model."""
-    import whisper
     import torch
     
     device = "cuda" if torch.cuda.is_available() else "cpu"
