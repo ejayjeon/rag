@@ -103,29 +103,29 @@ setup-streamlit:
 # requirements.txt 생성
 requirements:
 	@echo "📋 requirements.txt 생성 중..."
-	@uv pip compile pyproject.toml --no-deps -q > requirements_temp.txt
-
-	@{ \
-	  echo "# Auto-generated from pyproject.toml"; \
-	  echo "# Generated at: $$(date -u +'%Y-%m-%dT%H:%M:%SZ')"; \
-	  echo; \
-	  echo "# Torch CPU version for Streamlit Cloud"; \
-	  echo "--find-links https://download.pytorch.org/whl/torch_stable.html"; \
-	  echo "torch==2.3.1+cpu"; \
-	  echo; \
-	  echo "# Audio processing dependencies"; \
-	  echo "openai-whisper==20240930"; \
-	  echo "pydub==0.25.1"; \
-	  echo "numpy==2.3.2"; \
-	  echo; \
-	  echo "# Other dependencies"; \
-	} > requirements.txt
-
-	# 중복 제거: 위에서 고정한 패키지들은 temp에서 제외
-	@grep -Ev '^(torch==|openai-whisper==|pydub==|numpy==)' requirements_temp.txt >> requirements.txt
-	@rm -f requirements_temp.txt
+	@# uv를 사용하여 requirements.txt 생성
+	@uv pip compile pyproject.toml --no-deps > requirements_temp.txt
+	@# Streamlit Cloud용 최적화
+	@echo "# Auto-generated from pyproject.toml" > requirements.txt
+	@echo "# Generated at: $$(date)" >> requirements.txt
+	@echo "" >> requirements.txt
+	@echo "# Torch CPU version for Streamlit Cloud" >> requirements.txt
+	@echo "--find-links https://download.pytorch.org/whl/torch_stable.html" >> requirements.txt
+	@echo "torch==2.1.0+cpu" >> requirements.txt
+	@echo "" >> requirements.txt
+	@echo "# Audio processing dependencies" >> requirements.txt
+	@echo "openai-whisper==20240930" >> requirements.txt
+	@echo "soundfile==0.12.0" >> requirements.txt
+	@echo "pydub==0.25.1" >> requirements.txt
+	@echo "numpy==2.3.2" >> requirements.txt
+	@echo "touch>=2.3" >> requirements.txt
+	@echo "ffmpeg-python" >> requirements.txt
+	
+	@echo "" >> requirements.txt
+	@echo "# Other dependencies" >> requirements.txt
+	@grep -v "torch\|openai-whisper\|pydub\|numpy" requirements_temp.txt >> requirements.txt
+	@rm requirements_temp.txt
 	@echo "✅ requirements.txt 생성 완료"
-
 
 # 배포 준비 상태 확인
 check-deploy:
