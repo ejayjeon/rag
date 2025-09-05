@@ -1,9 +1,9 @@
 # Auto-generated from pyproject.toml
-# Generated at: #오후
+# Generated at: 2025-09-05T08:04:36Z
 
 # Torch CPU version for Streamlit Cloud
 --find-links https://download.pytorch.org/whl/torch_stable.html
-torch==2.1.0+cpu
+torch==2.3.1+cpu
 
 # Audio processing dependencies
 openai-whisper==20240930
